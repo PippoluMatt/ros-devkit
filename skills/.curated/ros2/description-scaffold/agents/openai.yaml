@@ -1,4 +1,4 @@
 interface:
   display_name: "ROS2 Description Scaffold"
   short_description: "Scaffold and validate ROS2 URDF/xacro description packages"
-  default_prompt: "Use $ros2-description-scaffold --verify, --create, or --split for a ROS2 robot description package."
+  default_prompt: "Use `ros-devkit description-scaffold --verify`, `--create`, or `--split` for a ROS2 robot description package."
