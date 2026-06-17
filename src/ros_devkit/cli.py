@@ -91,6 +91,8 @@ def _print_help() -> None:
     print("  ros-devkit description-scaffold --verify")
     print("  ros-devkit description-scaffold --split")
     print("  ros-devkit description-scaffold --create my_robot")
+    print("  ros-devkit gazebo-simulation --diagnose")
+    print("  ros-devkit gazebo-simulation --setup")
     print("  ros-devkit doctor")
     print("  ros-devkit update")
     print("  ros-devkit update --dry-run")
