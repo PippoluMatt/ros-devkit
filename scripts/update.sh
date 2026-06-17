@@ -262,6 +262,7 @@ write_cli_wrapper() {
     echo 'set -euo pipefail'
     printf 'ROS_DEVKIT_SOURCE=%q\n' "$SOURCE_DIR"
     printf 'ROS_DEVKIT_PYTHON=%q\n' "$VENV_DIR/bin/python"
+    echo 'export ROS_DEVKIT_SOURCE ROS_DEVKIT_PYTHON'
     echo 'PYTHONPATH="$ROS_DEVKIT_SOURCE/src${PYTHONPATH:+:$PYTHONPATH}"'
     echo 'export PYTHONPATH'
     echo 'exec "$ROS_DEVKIT_PYTHON" -m ros_devkit.cli "$@"'

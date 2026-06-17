@@ -66,6 +66,15 @@ class UpdateCommandTest(unittest.TestCase):
             self.assertEqual(wrapper_before, install.managed_bin_target.read_text(encoding="utf-8"))
             self.assertFalse((install.namespace_root / "description-scaffold" / "UPDATED.txt").exists())
 
+    def test_legacy_wrapper_without_export_can_update(self) -> None:
+        with ManagedInstall() as install:
+            install.write_managed_wrapper(export_source=False)
+
+            completed = install.run_update("--dry-run")
+
+            self.assertEqual(0, completed.returncode)
+            self.assertIn("Dry run: no changes made.", completed.stdout)
+
     def test_unmanaged_command_path_fails(self) -> None:
         with ManagedInstall() as install:
             install.bin_path.unlink()
@@ -73,7 +82,7 @@ class UpdateCommandTest(unittest.TestCase):
             unmanaged_target.write_text("#!/usr/bin/env bash\n", encoding="utf-8")
             install.bin_path.symlink_to(unmanaged_target)
 
-            completed = install.run_update(check=False)
+            completed = install.run_update(command_path=install.managed_bin_target, check=False)
 
             self.assertNotEqual(0, completed.returncode)
             self.assertIn("not managed by this installer", completed.stderr)
@@ -104,7 +113,12 @@ class ManagedInstall:
     def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
         self._tmp.cleanup()
 
-    def run_update(self, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+    def run_update(
+        self,
+        *args: str,
+        command_path: Path | None = None,
+        check: bool = True,
+    ) -> subprocess.CompletedProcess[str]:
         env = os.environ.copy()
         env.update(
             {
@@ -113,12 +127,10 @@ class ManagedInstall:
                 "ROS_DEVKIT_INSTALL_HOME": str(self.install_home),
                 "ROS_DEVKIT_BIN_DIR": str(self.bin_dir),
                 "ROS_DEVKIT_REPO_URL": str(self.remote),
-                "ROS_DEVKIT_SOURCE": str(self.source_dir),
-                "PYTHONPATH": str(self.source_dir / "src"),
             }
         )
         return subprocess.run(
-            [sys.executable, "-m", "ros_devkit.cli", "update", *args],
+            [str(command_path or self.bin_path), "update", *args],
             cwd=self.root,
             env=env,
             text=True,
@@ -185,7 +197,7 @@ class ManagedInstall:
 
         shutil.copytree(self.source_dir / "skills" / ".curated" / "ros2", self.namespace_root)
         self._write_config()
-        self._write_managed_wrapper()
+        self.write_managed_wrapper()
 
     def _write_config(self) -> None:
         config_dir = self.config_home / "ros-devkit"
@@ -200,12 +212,28 @@ class ManagedInstall:
             encoding="utf-8",
         )
 
-    def _write_managed_wrapper(self) -> None:
-        (self.venv_dir / "bin").mkdir(parents=True)
-        self.managed_bin_target.write_text("#!/usr/bin/env bash\n", encoding="utf-8")
+    def write_managed_wrapper(self, export_source: bool = True) -> None:
+        export_line = "export ROS_DEVKIT_SOURCE ROS_DEVKIT_PYTHON\n" if export_source else ""
+        (self.venv_dir / "bin").mkdir(parents=True, exist_ok=True)
+        self.managed_bin_target.write_text(
+            textwrap.dedent(
+                f"""\
+                #!/usr/bin/env bash
+                set -euo pipefail
+                ROS_DEVKIT_SOURCE={self.source_dir}
+                ROS_DEVKIT_PYTHON={sys.executable}
+                {export_line}\
+                PYTHONPATH="$ROS_DEVKIT_SOURCE/src${{PYTHONPATH:+:$PYTHONPATH}}"
+                export PYTHONPATH
+                exec "$ROS_DEVKIT_PYTHON" -m ros_devkit.cli "$@"
+                """
+            ),
+            encoding="utf-8",
+        )
         self.managed_bin_target.chmod(0o755)
-        self.bin_dir.mkdir(parents=True)
-        self.bin_path.symlink_to(self.managed_bin_target)
+        self.bin_dir.mkdir(parents=True, exist_ok=True)
+        if not self.bin_path.exists() and not self.bin_path.is_symlink():
+            self.bin_path.symlink_to(self.managed_bin_target)
 
 
 if __name__ == "__main__":
