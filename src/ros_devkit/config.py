@@ -52,6 +52,10 @@ def load_config(config_file: Path | None = None) -> RosDevkitConfig:
     if not skill_root:
         raise ConfigError(f"Missing ROS_DEVKIT_SKILL_ROOT in config file: {path}")
 
+    skill_root_override = os.environ.get("ROS_DEVKIT_SKILL_ROOT")
+    if skill_root_override:
+        skill_root = skill_root_override
+
     return RosDevkitConfig(
         agent=agent,
         skill_root=Path(skill_root).expanduser(),

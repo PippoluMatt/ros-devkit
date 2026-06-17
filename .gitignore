@@ -1,6 +1,8 @@
 **/.vscode/
 
 **/test*
+!tests/
+!tests/test_update.py
 **/__pycache__/
 **/.agents/
 **/.codex/
