@@ -373,7 +373,7 @@ def scaffold(
     print(f"  1. Customize links/joints in urdf/{name}.urdf.xacro")
     print(f"  2. Adjust sensor positions and enable Gazebo plugins")
     print(f"  3. Update license in package.xml")
-    print(f"  4. Validate: python3 scripts/description_scaffold.py --verify {pkg_dir}")
+    print(f"  4. Validate: ros-devkit description-scaffold --verify {pkg_dir}")
 
 
 if __name__ == "__main__":

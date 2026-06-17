@@ -299,7 +299,7 @@ One file per sensor. Contains: link, joint to parent, optional Gazebo plugin.
 
 ## CMakeLists.txt
 
-Expected final state after `ros2 pkg create --dependencies urdf xacro` and scaffold script edits:
+Expected final state after `ros-devkit description-scaffold --create`:
 
 ```cmake
 cmake_minimum_required(VERSION 3.8)

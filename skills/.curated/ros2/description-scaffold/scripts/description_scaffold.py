@@ -154,7 +154,7 @@ def _repair_package(pkg_dir: Path, sensors: list[str]) -> int:
         print(f"Created : {', '.join(created)}")
     else:
         print("INFO: No missing minimal files or directories found")
-    print(f"Verify  : python3 {Path(__file__).name} --verify {pkg_dir}")
+    print(f"Verify  : ros-devkit description-scaffold --verify {pkg_dir}")
     return 0
 
 
@@ -410,7 +410,7 @@ def _split(target: str | None, args: argparse.Namespace) -> int:
     print(f"Created : {', '.join(created)}")
     if not sensor_names:
         print("WARN: No sensor-specific blocks detected; definitions stayed in robot body file")
-    print(f"Verify  : python3 {Path(__file__).name} --verify {pkg_dir}")
+    print(f"Verify  : ros-devkit description-scaffold --verify {pkg_dir}")
     return 0
 
 
