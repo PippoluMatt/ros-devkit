@@ -1,0 +1,4 @@
+interface:
+  display_name: "MCU Protocol"
+  short_description: "Design MCU wire protocols for ROS2"
+  default_prompt: "Use $mcu-protocol to design or review the MCU communication protocol for my ROS2 robot."

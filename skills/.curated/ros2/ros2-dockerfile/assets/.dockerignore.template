@@ -1,0 +1,44 @@
+# .dockerignore for a ROS 2 colcon workspace used as a Docker build context.
+# The build context is the workspace root; we only COPY into the image what
+# the Dockerfile explicitly copies. Exclude the rest to keep the context small
+# and to prevent build/install/log directories from leaking into the daemon.
+
+# Build artifacts
+build/
+install/
+log/
+.colcon/
+
+# VCS metadata (the Dockerfile clones via vcs when OVERLAY_REPOS_URL is set)
+.git/
+.gitignore
+.gitattributes
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*~
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# OS noise
+.DS_Store
+Thumbs.db
+
+# CI / docs that aren't source
+.github/
+docs/
+*.md
+LICENSE
+CODE_OF_CONDUCT.md
+CONTRIBUTING.md
+
+# Docker artifacts
+Dockerfile
+.dockerignore

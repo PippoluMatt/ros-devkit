@@ -1,0 +1,4 @@
+interface:
+  display_name: "ROS2 Launch"
+  short_description: "Create and debug ROS2 launch files"
+  default_prompt: "Use $ros2-launch to create or fix a ROS2 launch file in a bringup package."

@@ -1,0 +1,2 @@
+[console_scripts]
+ros-devkit = ros_devkit.cli:main

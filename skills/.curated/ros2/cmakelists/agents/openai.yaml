@@ -1,0 +1,4 @@
+interface:
+  display_name: "ROS2 CMakeLists"
+  short_description: "Create and normalize ROS2 CMakeLists.txt files"
+  default_prompt: "Use $ros2-cmakelists to fix this ROS2 package CMakeLists.txt."

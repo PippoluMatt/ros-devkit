@@ -1,0 +1,4 @@
+interface:
+  display_name: "MCU FreeRTOS"
+  short_description: "Build and maintain MCU RTOS firmware"
+  default_prompt: "Use $mcu-freertos to help create, edit, or debug firmware for my MCU RTOS project."

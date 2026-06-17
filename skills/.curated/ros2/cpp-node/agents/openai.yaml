@@ -1,0 +1,4 @@
+interface:
+  display_name: "ROS2 Node Core"
+  short_description: "Shared ROS2 node design and C++ patterns"
+  default_prompt: "Use $ros2-cpp-node as the shared ROS2 node module before changing node behavior or C++ node code."

@@ -1,0 +1,48 @@
+Metadata-Version: 2.4
+Name: ros-devkit
+Version: 0.1.0
+Summary: CLI dispatcher for installed ROS2 DevKit agent skills.
+License: MIT
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Dynamic: license-file
+
+# ROS2 DevKit
+
+Curated Codex skills for ROS2 development.
+
+## CLI
+
+Install the CLI as a machine-level command outside any project virtualenv, then
+configure it to use the ROS2 skills installed for your agent account.
+
+```bash
+python3 -m pip install .
+scripts/configure_ros_devkit.sh --agent codex
+```
+
+Supported agent roots:
+
+- `codex`: `~/.codex/skills/ros2`
+- `claude`: `~/.claude/skills/ros2`
+- `pi`: `~/.pi/agent/skills/ros2`
+
+For another location:
+
+```bash
+scripts/configure_ros_devkit.sh --agent custom --skill-root /path/to/skills/ros2
+```
+
+The v1 command registry exposes:
+
+```bash
+ros-devkit description-scaffold --verify
+ros-devkit description-scaffold --split
+ros-devkit description-scaffold --create my_robot
+ros-devkit doctor
+```
+
+`ros-devkit` only dispatches to scripts under the configured installed ROS2
+skill root. It does not fall back to this repository's `skills/.curated/ros2`
+directory.

@@ -1,0 +1,4 @@
+interface:
+  display_name: "ROS2 Sensor"
+  short_description: "Create and review ROS2 sensor interfaces"
+  default_prompt: "Use $ros2-sensor to create or review a ROS2 sensor interface with standard messages, frames, timestamps, and QoS."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Robot Profile"
+  short_description: "Capture ROS2 robot hardware context"
+  default_prompt: "Use $robot-profile to interview me about my robot and update ROBOTS.md."

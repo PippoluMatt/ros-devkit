@@ -1,0 +1,104 @@
+# syntax=docker/dockerfile:1.6
+# ROS 2 custom-image Dockerfile.
+#
+# Defaults (override at build time):
+#   --build-arg ROS_DISTRO=jazzy
+#   --build-arg FROM_IMAGE=osrf/ros:${ROS_DISTRO:-jazzy}-ros-base
+#   --build-arg OVERLAY_WS=/opt/ros/overlay_ws
+#   --build-arg OVERLAY_REPOS_URL=           (unset -> no overlay build)
+#   --build-arg OVERLAY_PACKAGES=            (unset -> build everything imported)
+#
+# When OVERLAY_REPOS_URL is set, the image builds an overlay workspace on top of
+# the base image and sources it from /ros_entrypoint.sh. When it is unset, the
+# image is the base image plus any apt packages you add below.
+
+ARG FROM_IMAGE=osrf/ros:${ROS_DISTRO:-jazzy}-ros-base
+ARG OVERLAY_WS=/opt/ros/overlay_ws
+
+# -----------------------------------------------------------------------------
+# Stage 1: cacher
+# Clone the overlay source and copy only package.xml manifests into a
+# dependency-only layer so apt/rosdep do not re-run when source files change.
+# -----------------------------------------------------------------------------
+FROM $FROM_IMAGE AS cacher
+
+ARG ROS_DISTRO=jazzy
+ARG OVERLAY_WS
+ARG OVERLAY_REPOS_URL
+
+WORKDIR $OVERLAY_WS/src
+RUN if [ -n "$OVERLAY_REPOS_URL" ]; then \
+      curl -fsSL "$OVERLAY_REPOS_URL" -o /tmp/overlay.repos && \
+      vcs import ./ < /tmp/overlay.repos; \
+    else \
+      echo "OVERLAY_REPOS_URL not set: skipping overlay clone" && \
+      mkdir -p "$OVERLAY_WS/src" && \
+      : > "$OVERLAY_WS/src/COLCON_IGNORE"; \
+    fi
+
+WORKDIR /opt
+RUN mkdir -p /tmp/opt && \
+    if [ -n "$OVERLAY_REPOS_URL" ]; then \
+      find ./ -name "package.xml" \
+        | xargs cp --parents -t /tmp/opt && \
+      find ./ -name "COLCON_IGNORE" \
+        | xargs cp --parents -t /tmp/opt || true; \
+    fi
+
+# -----------------------------------------------------------------------------
+# Stage 2: builder
+# Install overlay dependencies (rosdep), then build the overlay packages.
+# -----------------------------------------------------------------------------
+FROM $FROM_IMAGE AS builder
+
+ARG ROS_DISTRO=jazzy
+ARG OVERLAY_WS
+ARG OVERLAY_REPOS_URL
+ARG OVERLAY_PACKAGES
+
+WORKDIR $OVERLAY_WS
+COPY --from=cacher /tmp/$OVERLAY_WS/src ./src
+RUN if [ -n "$OVERLAY_REPOS_URL" ]; then \
+      . /opt/ros/$ROS_DISTRO/setup.sh && \
+      apt-get update && \
+      rosdep install -y \
+        --from-paths src \
+        --ignore-src \
+        --rosdistro $ROS_DISTRO && \
+      rm -rf /var/lib/apt/lists/*; \
+    fi
+
+COPY --from=cacher $OVERLAY_WS/src ./src
+ARG OVERLAY_MIXINS="release"
+RUN if [ -n "$OVERLAY_REPOS_URL" ]; then \
+      . /opt/ros/$ROS_DISTRO/setup.sh && \
+      if [ -n "$OVERLAY_PACKAGES" ]; then \
+        colcon build \
+          --packages-select $OVERLAY_PACKAGES \
+          --mixin $OVERLAY_MIXINS; \
+      else \
+        colcon build --mixin $OVERLAY_MIXINS; \
+      fi; \
+    fi
+
+# -----------------------------------------------------------------------------
+# Final stage: runtime image
+# Patch /ros_entrypoint.sh to source the overlay (when built) and default
+# CMD to a shell so the user passes their own command at `docker run` time.
+# -----------------------------------------------------------------------------
+FROM $FROM_IMAGE
+
+ARG ROS_DISTRO=jazzy
+ARG OVERLAY_WS
+ARG OVERLAY_REPOS_URL
+ENV OVERLAY_WS=$OVERLAY_WS
+ENV ROS_DISTRO=$ROS_DISTRO
+
+COPY --from=builder $OVERLAY_WS $OVERLAY_WS
+RUN if [ -n "$OVERLAY_REPOS_URL" ] && [ -f "$OVERLAY_WS/install/setup.bash" ]; then \
+      sed --in-place --expression \
+        '$isource "$OVERLAY_WS/install/setup.bash"' \
+        /ros_entrypoint.sh; \
+    fi
+
+CMD ["bash"]

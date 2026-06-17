@@ -1,0 +1,4 @@
+interface:
+  display_name: "ROS2 Dockerfile"
+  short_description: "Author a Dockerfile that builds a custom ROS 2 image from osrf/ros:<distro>-ros-base with an optional overlay of git-cloned packages."
+  default_prompt: "Use $ros2-dockerfile to generate a Dockerfile for a custom ROS 2 image with an overlay of packages from a .repos file."
