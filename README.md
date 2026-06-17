@@ -61,6 +61,32 @@ To install a specific Git ref:
 curl -fsSL https://raw.githubusercontent.com/PippoluMatt/ros-devkit/main/scripts/install.sh | bash -s -- --agent codex --ref v0.1.0
 ```
 
+## Updating
+
+Installer-managed installs can update the CLI, managed source checkout, command
+wrapper, and installed `ros2` skills from the latest `main` branch:
+
+```bash
+ros-devkit update
+```
+
+The updater stages the new source, a fresh CLI venv, and the new skill
+namespace before replacing live files. It stops if the installed `ros2`
+namespace has local edits compared with the previous managed source copy.
+
+Use a dry run to fetch and validate the update without changing the live
+install:
+
+```bash
+ros-devkit update --dry-run
+```
+
+Use `--force` only when you want to replace locally edited installed skills:
+
+```bash
+ros-devkit update --force
+```
+
 ### Local development install
 
 From a local checkout:
@@ -84,6 +110,7 @@ scripts/configure_ros_devkit.sh --agent custom --namespace-root /path/to/skills/
 | --- | --- |
 | `description-scaffold` | Dispatched to skill script — scaffold, verify, or split URDF/xacro packages |
 | `doctor` | Built-in — check config and validate that mapped scripts exist |
+| `update` | Built-in — update an installer-managed install from latest `main` |
 | `--help` | Show available commands |
 | `--version` | Print version |
 
@@ -110,6 +137,17 @@ ros-devkit doctor
 
 Checks that the configured skill root exists and that every mapped script is
 present. Exits non-zero if any error is found.
+
+### update
+
+```bash
+ros-devkit update
+ros-devkit update --dry-run
+ros-devkit update --force
+```
+
+`update` is available only for installer-managed installs. Local development
+installs should be updated by pulling the checkout and reinstalling locally.
 
 ## Skill catalog
 

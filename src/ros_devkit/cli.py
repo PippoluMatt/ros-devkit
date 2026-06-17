@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
+from pathlib import Path
 
 from . import __version__
 from .config import ConfigError, load_config
@@ -28,6 +30,9 @@ def main(argv: list[str] | None = None) -> int:
     if command_name == "doctor":
         return doctor_main(command_args)
 
+    if command_name == "update":
+        return _run_update(command_args)
+
     command = COMMANDS.get(command_name)
     if command is None:
         print(f"ERROR: Unknown command: {command_name}", file=sys.stderr)
@@ -50,6 +55,24 @@ def main(argv: list[str] | None = None) -> int:
     return completed.returncode
 
 
+def _run_update(args: list[str]) -> int:
+    source_dir = os.environ.get("ROS_DEVKIT_SOURCE")
+    if not source_dir:
+        print(
+            "ERROR: update is only available for installer-managed installs.",
+            file=sys.stderr,
+        )
+        return 1
+
+    script = Path(source_dir).expanduser() / "scripts" / "update.sh"
+    if not script.is_file():
+        print(f"ERROR: Missing updater script: {script}", file=sys.stderr)
+        return 1
+
+    completed = subprocess.run(["bash", str(script), *args])
+    return completed.returncode
+
+
 def _print_help() -> None:
     print("usage: ros-devkit <command> [args...]")
     print()
@@ -57,12 +80,16 @@ def _print_help() -> None:
     for command_name in sorted(COMMANDS):
         print(f"  {command_name}")
     print("  doctor")
+    print("  update")
     print()
     print("Examples:")
     print("  ros-devkit description-scaffold --verify")
     print("  ros-devkit description-scaffold --split")
     print("  ros-devkit description-scaffold --create my_robot")
     print("  ros-devkit doctor")
+    print("  ros-devkit update")
+    print("  ros-devkit update --dry-run")
+    print("  ros-devkit update --force")
 
 
 if __name__ == "__main__":
