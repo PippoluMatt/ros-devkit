@@ -8,7 +8,6 @@ structure and reports findings as ERROR, WARN, and INFO.
 from __future__ import annotations
 
 import argparse
-import os
 import re
 import sys
 import xml.etree.ElementTree as ET
@@ -18,32 +17,23 @@ SHARED_SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
 sys.path.insert(0, str(SHARED_SCRIPTS))
 
 from cmake import remove_default_lint_block  # noqa: E402
+from diagnostics import Finding, format_severity, print_finding  # noqa: E402
 
 RESOURCE_INSTALL_DIRS = ("urdf", "meshes", "rviz", "config", "launch")
 DISCOVERY_SKIP_DIRS = {".git", "build", "install", "log"}
-SEVERITY_COLORS = {
-    "ERROR": "\033[31m",
-    "WARN": "\033[33m",
-    "INFO": "\033[32m",
-}
-RESET_COLOR = "\033[0m"
-
-
-def _should_colorize() -> bool:
-    if "NO_COLOR" in os.environ or os.environ.get("TERM") == "dumb":
-        return False
-    return sys.stdout.isatty()
 
 
 def _format_severity(severity: str, color: bool | None = None) -> str:
-    use_color = _should_colorize() if color is None else color
-    if use_color:
-        return f"{SEVERITY_COLORS[severity]}{severity}{RESET_COLOR}"
-    return severity
+    return format_severity(severity, color)
 
 
-def _print_finding(severity: str, message: str, color: bool | None = None) -> None:
-    print(f"{_format_severity(severity, color)}: {message}")
+def _print_finding(
+    severity: str,
+    message: str,
+    color: bool | None = None,
+    source: str | None = None,
+) -> None:
+    print_finding(Finding(severity, message, source), color)
 
 
 def find_package_name(pkg_dir: Path) -> str:
@@ -221,21 +211,26 @@ def _print_report(
     print()
 
     for error in errors:
-        _print_finding("ERROR", error)
+        _print_finding("ERROR", error, source=pkg_name)
     for warning in warnings:
-        _print_finding("WARN", warning)
+        _print_finding("WARN", warning, source=pkg_name)
     for info in infos:
-        _print_finding("INFO", info)
+        _print_finding("INFO", info, source=pkg_name)
 
     if not errors and not warnings:
-        _print_finding("INFO", "All checks passed; package structure is compliant")
+        _print_finding(
+            "INFO",
+            "All checks passed; package structure is compliant",
+            source=pkg_name,
+        )
     elif not errors:
         _print_finding(
             "INFO",
             "No errors found; review warnings for structure improvements",
+            source=pkg_name,
         )
     else:
-        _print_finding("ERROR", "Errors found; fix before proceeding")
+        _print_finding("ERROR", "Errors found; fix before proceeding", source=pkg_name)
 
     print()
 

@@ -15,6 +15,7 @@ SHARED_SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
 sys.path.insert(0, str(SHARED_SCRIPTS))
 
 from cmake import add_install_share_directories  # noqa: E402
+from diagnostics import Finding, print_finding  # noqa: E402
 
 DISCOVERY_SKIP_DIRS = {".git", ".venv", "__pycache__", "build", "install", "log"}
 BRINGUP_INSTALL_DIRS = ("launch", "config", "worlds")
@@ -110,12 +111,6 @@ VALID_TYPE_PAIRS: dict[str, set[str]] = {
     "vision_msgs/msg/Detection3D": {"gz.msgs.AnnotatedOriented3DBox"},
     "vision_msgs/msg/Detection3DArray": {"gz.msgs.AnnotatedOriented3DBox_V"},
 }
-
-
-@dataclass(frozen=True)
-class Finding:
-    severity: str
-    message: str
 
 
 @dataclass
@@ -244,6 +239,12 @@ def _relative(path: Path, root: Path) -> str:
         return str(path)
 
 
+def _source(pkg_name: str, rel_path: str | None = None) -> str:
+    if rel_path:
+        return f"{pkg_name}:{rel_path}"
+    return pkg_name
+
+
 def _cmake_without_comments(text: str) -> str:
     return "\n".join(line.split("#", 1)[0] for line in text.splitlines())
 
@@ -277,89 +278,168 @@ def _diagnose_description(pkg_dir: Path, findings: list[Finding]) -> str | None:
     robot_name = robot_name_from_package(pkg_name)
     urdf_dir = pkg_dir / "urdf"
 
-    findings.append(Finding("INFO", f"Description package: {pkg_name} ({pkg_dir})"))
+    findings.append(
+        Finding("INFO", f"Description package path: {pkg_dir}", source=pkg_name)
+    )
 
     if not urdf_dir.is_dir():
-        findings.append(Finding("ERROR", f"Missing description urdf/ directory: {pkg_dir / 'urdf'}"))
+        findings.append(
+            Finding(
+                "ERROR",
+                f"Missing description urdf/ directory: {pkg_dir / 'urdf'}",
+                source=pkg_name,
+            )
+        )
         return robot_name
 
     xacro_files = sorted(urdf_dir.glob("*.xacro"))
     if not xacro_files:
-        findings.append(Finding("ERROR", f"No xacro files found under {_relative(urdf_dir, pkg_dir)}"))
+        findings.append(
+            Finding(
+                "ERROR",
+                f"No xacro files found under {_relative(urdf_dir, pkg_dir)}",
+                source=pkg_name,
+            )
+        )
 
     for xacro_file in xacro_files:
+        rel = _relative(xacro_file, pkg_dir)
         try:
             root = ET.parse(xacro_file).getroot()
         except ET.ParseError as exc:
-            findings.append(Finding("ERROR", f"Invalid XML in {_relative(xacro_file, pkg_dir)}: {exc}"))
+            findings.append(
+                Finding("ERROR", f"Invalid XML: {exc}", source=_source(pkg_name, rel))
+            )
             continue
         for link in root.iter():
             if _local_name(link.tag) != "link":
                 continue
             link_name = link.attrib.get("name", "").strip()
             if _link_is_footprint(link_name):
-                findings.append(Finding("INFO", f"Footprint link exempt from physics tags: {link_name}"))
+                findings.append(
+                    Finding(
+                        "INFO",
+                        f"Footprint link exempt from physics tags: {link_name}",
+                        source=_source(pkg_name, rel),
+                    )
+                )
                 continue
-            label = link_name or f"unnamed link in {_relative(xacro_file, pkg_dir)}"
+            label = link_name or "unnamed link"
             if not _has_direct_child(link, "collision"):
-                findings.append(Finding("ERROR", f"Link missing collision tag: {label}"))
+                findings.append(
+                    Finding(
+                        "ERROR",
+                        f"Link missing collision tag: {label}",
+                        source=_source(pkg_name, rel),
+                    )
+                )
             if not _has_direct_child(link, "inertial"):
-                findings.append(Finding("ERROR", f"Link missing inertial tag: {label}"))
+                findings.append(
+                    Finding(
+                        "ERROR",
+                        f"Link missing inertial tag: {label}",
+                        source=_source(pkg_name, rel),
+                    )
+                )
 
     gazebo_xacro = urdf_dir / f"{robot_name}_gazebo.xacro"
+    gazebo_rel = f"urdf/{robot_name}_gazebo.xacro"
     if not gazebo_xacro.exists():
-        findings.append(Finding("ERROR", f"Missing Gazebo xacro: urdf/{robot_name}_gazebo.xacro"))
+        findings.append(
+            Finding("ERROR", f"Missing Gazebo xacro: {gazebo_rel}", source=pkg_name)
+        )
     else:
-        findings.append(Finding("INFO", f"Found Gazebo xacro: urdf/{robot_name}_gazebo.xacro"))
+        findings.append(
+            Finding("INFO", "Found Gazebo xacro", source=_source(pkg_name, gazebo_rel))
+        )
         try:
             root = ET.parse(gazebo_xacro).getroot()
             if not any(_local_name(element.tag) == "gazebo" for element in root.iter()):
                 findings.append(
-                    Finding("WARN", f"urdf/{robot_name}_gazebo.xacro contains no <gazebo> elements")
+                    Finding(
+                        "WARN",
+                        "contains no <gazebo> elements",
+                        source=_source(pkg_name, gazebo_rel),
+                    )
                 )
         except ET.ParseError as exc:
-            findings.append(Finding("ERROR", f"Invalid XML in urdf/{robot_name}_gazebo.xacro: {exc}"))
+            findings.append(
+                Finding(
+                    "ERROR",
+                    f"Invalid XML: {exc}",
+                    source=_source(pkg_name, gazebo_rel),
+                )
+            )
 
     entrypoint = urdf_dir / "main.xacro"
     if entrypoint.exists():
         content = entrypoint.read_text(encoding="utf-8")
         if f"{robot_name}_gazebo.xacro" in content:
-            findings.append(Finding("INFO", f"main.xacro includes {robot_name}_gazebo.xacro"))
+            findings.append(
+                Finding(
+                    "INFO",
+                    f"includes {robot_name}_gazebo.xacro",
+                    source=_source(pkg_name, "urdf/main.xacro"),
+                )
+            )
         else:
-            findings.append(Finding("WARN", f"main.xacro does not include {robot_name}_gazebo.xacro"))
+            findings.append(
+                Finding(
+                    "WARN",
+                    f"does not include {robot_name}_gazebo.xacro",
+                    source=_source(pkg_name, "urdf/main.xacro"),
+                )
+            )
     else:
-        findings.append(Finding("WARN", "Missing urdf/main.xacro; cannot check Gazebo xacro include"))
+        findings.append(
+            Finding(
+                "WARN",
+                "Missing urdf/main.xacro; cannot check Gazebo xacro include",
+                source=pkg_name,
+            )
+        )
 
     return robot_name
 
 
 def _diagnose_bringup(pkg_dir: Path, findings: list[Finding]) -> None:
     pkg_name = find_package_name(pkg_dir)
-    findings.append(Finding("INFO", f"Bringup package: {pkg_name} ({pkg_dir})"))
+    findings.append(Finding("INFO", f"Bringup package path: {pkg_dir}", source=pkg_name))
 
     for rel_path in ("package.xml", "CMakeLists.txt"):
         if (pkg_dir / rel_path).exists():
-            findings.append(Finding("INFO", f"Found bringup file: {rel_path}"))
+            findings.append(
+                Finding("INFO", "Found bringup file", source=_source(pkg_name, rel_path))
+            )
         else:
-            findings.append(Finding("ERROR", f"Bringup package missing {rel_path}"))
+            findings.append(
+                Finding("ERROR", f"Bringup package missing {rel_path}", source=pkg_name)
+            )
 
     launch_dir = pkg_dir / "launch"
     if launch_dir.is_dir():
-        findings.append(Finding("INFO", "Found bringup launch/ directory"))
+        findings.append(Finding("INFO", "Found bringup launch/ directory", source=pkg_name))
     else:
-        findings.append(Finding("ERROR", "Bringup package missing launch/ directory"))
+        findings.append(Finding("ERROR", "Bringup package missing launch/ directory", source=pkg_name))
 
     cmake = pkg_dir / "CMakeLists.txt"
     installed_dirs: set[str] = set()
     if cmake.exists():
         installed_dirs = _installed_share_directories(cmake.read_text(encoding="utf-8"))
         if "launch" in installed_dirs:
-            findings.append(Finding("INFO", "CMakeLists.txt installs launch/"))
+            findings.append(
+                Finding(
+                    "INFO",
+                    "CMakeLists.txt installs launch/",
+                    source=_source(pkg_name, "CMakeLists.txt"),
+                )
+            )
         else:
             findings.append(
                 Finding(
                     "ERROR",
                     "CMakeLists.txt must install launch/ to share/${PROJECT_NAME}",
+                    source=_source(pkg_name, "CMakeLists.txt"),
                 )
             )
         for directory in ("config", "worlds"):
@@ -368,6 +448,7 @@ def _diagnose_bringup(pkg_dir: Path, findings: list[Finding]) -> None:
                     Finding(
                         "WARN",
                         f"CMakeLists.txt does not install present {directory}/ directory",
+                        source=pkg_name,
                     )
                 )
 
@@ -430,20 +511,40 @@ def _parse_bridge_key_value(line: str, target: dict[str, str], line_number: int)
 
 
 def _diagnose_bridge(pkg_dir: Path, findings: list[Finding]) -> None:
+    pkg_name = find_package_name(pkg_dir)
     bridge = pkg_dir / "config" / "gazebo_bridge.yaml"
     if not bridge.exists():
-        findings.append(Finding("WARN", "Missing Gazebo bridge: config/gazebo_bridge.yaml"))
+        findings.append(
+            Finding(
+                "WARN",
+                "Missing Gazebo bridge: config/gazebo_bridge.yaml",
+                source=pkg_name,
+            )
+        )
         return
 
-    findings.append(Finding("INFO", "Found Gazebo bridge: config/gazebo_bridge.yaml"))
+    bridge_source = _source(pkg_name, "config/gazebo_bridge.yaml")
+    findings.append(Finding("INFO", "Found Gazebo bridge", source=bridge_source))
     try:
         entries = _parse_bridge_yaml(bridge)
     except (OSError, ValueError) as exc:
-        findings.append(Finding("ERROR", f"Invalid gazebo_bridge.yaml: {exc}"))
+        findings.append(
+            Finding(
+                "ERROR",
+                f"Invalid gazebo_bridge.yaml: {exc}",
+                source=bridge_source,
+            )
+        )
         return
 
     if not entries:
-        findings.append(Finding("ERROR", "gazebo_bridge.yaml has no bridge entries"))
+        findings.append(
+            Finding(
+                "ERROR",
+                "gazebo_bridge.yaml has no bridge entries",
+                source=bridge_source,
+            )
+        )
         return
 
     by_ros_topic: dict[str, dict[str, str]] = {}
@@ -454,13 +555,18 @@ def _diagnose_bridge(pkg_dir: Path, findings: list[Finding]) -> None:
                 Finding(
                     "ERROR",
                     f"Bridge entry {index} missing required keys: {', '.join(missing)}",
+                    source=bridge_source,
                 )
             )
             continue
         direction = entry["direction"]
         if direction not in VALID_DIRECTIONS:
             findings.append(
-                Finding("ERROR", f"Bridge entry {index} has invalid direction: {direction}")
+                Finding(
+                    "ERROR",
+                    f"Bridge entry {index} has invalid direction: {direction}",
+                    source=bridge_source,
+                )
             )
 
         ros_type = entry["ros_type_name"]
@@ -468,13 +574,18 @@ def _diagnose_bridge(pkg_dir: Path, findings: list[Finding]) -> None:
         valid_gz_types = VALID_TYPE_PAIRS.get(ros_type)
         if valid_gz_types is None:
             findings.append(
-                Finding("ERROR", f"Bridge entry {index} has unsupported ROS type: {ros_type}")
+                Finding(
+                    "ERROR",
+                    f"Bridge entry {index} has unsupported ROS type: {ros_type}",
+                    source=bridge_source,
+                )
             )
         elif gz_type not in valid_gz_types:
             findings.append(
                 Finding(
                     "ERROR",
                     f"Bridge entry {index} invalid type pairing: {ros_type} -> {gz_type}",
+                    source=bridge_source,
                 )
             )
 
@@ -485,11 +596,16 @@ def _diagnose_bridge(pkg_dir: Path, findings: list[Finding]) -> None:
             "gz_topic_name", ""
         ):
             findings.append(
-                Finding("WARN", f"Bridge {ros_topic} gz_topic_name should reference /model/<robot>")
+                Finding(
+                    "WARN",
+                    f"Bridge {ros_topic} gz_topic_name should reference /model/<robot>",
+                    source=bridge_source,
+                )
             )
 
 
 def _diagnose_launch(pkg_dir: Path, findings: list[Finding]) -> None:
+    pkg_name = find_package_name(pkg_dir)
     launch_dir = pkg_dir / "launch"
     if not launch_dir.is_dir():
         return
@@ -500,18 +616,31 @@ def _diagnose_launch(pkg_dir: Path, findings: list[Finding]) -> None:
         if path.suffix in {".xml", ".py"} or path.name.endswith((".launch.xml", ".launch.py"))
     )
     if not launch_files:
-        findings.append(Finding("WARN", "launch/ contains no XML or Python launch files"))
+        findings.append(
+            Finding(
+                "WARN",
+                "launch/ contains no XML or Python launch files",
+                source=pkg_name,
+            )
+        )
         return
 
     compliant_files: list[str] = []
     for launch_file in launch_files:
         text = launch_file.read_text(encoding="utf-8")
         rel = _relative(launch_file, pkg_dir)
+        launch_source = _source(pkg_name, rel)
         if launch_file.name.endswith(".xml"):
             try:
                 ET.fromstring(text)
             except ET.ParseError as exc:
-                findings.append(Finding("ERROR", f"Invalid XML launch file {rel}: {exc}"))
+                findings.append(
+                    Finding(
+                        "ERROR",
+                        f"Invalid XML launch file: {exc}",
+                        source=launch_source,
+                    )
+                )
                 continue
         checks = {
             "ros_gz_sim gz_sim.launch.py include": (
@@ -529,12 +658,24 @@ def _diagnose_launch(pkg_dir: Path, findings: list[Finding]) -> None:
         }
         missing = [label for label, passed in checks.items() if not passed]
         if missing:
-            findings.append(Finding("WARN", f"{rel} missing Gazebo launch wiring: {', '.join(missing)}"))
+            findings.append(
+                Finding(
+                    "WARN",
+                    f"missing Gazebo launch wiring: {', '.join(missing)}",
+                    source=launch_source,
+                )
+            )
         else:
             compliant_files.append(rel)
 
     if compliant_files:
-        findings.append(Finding("INFO", f"Gazebo launch wiring present in: {', '.join(compliant_files)}"))
+        findings.append(
+            Finding(
+                "INFO",
+                f"Gazebo launch wiring present in: {', '.join(compliant_files)}",
+                source=pkg_name,
+            )
+        )
 
 
 def diagnose(args: argparse.Namespace) -> bool:
@@ -821,13 +962,13 @@ def _print_report(title: str, context: Context, findings: list[Finding]) -> None
     print(f"Bringup     : {context.bringup_pkg or 'not found'}")
     print()
     for finding in findings:
-        print(f"{finding.severity}: {finding.message}")
+        print_finding(finding)
     if not findings:
-        print("INFO: No findings")
+        print_finding(Finding("INFO", "No findings"))
     elif not any(finding.severity == "ERROR" for finding in findings):
-        print("INFO: No errors found")
+        print_finding(Finding("INFO", "No errors found"))
     else:
-        print("ERROR: Errors found; fix before proceeding")
+        print_finding(Finding("ERROR", "Errors found; fix before proceeding"))
     print()
 
 
