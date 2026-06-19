@@ -2,34 +2,6 @@
 
 Use these templates when `--setup` is not enough or when adapting an existing launch file by hand.
 
-## config/gazebo_bridge.yaml
-
-```yaml
-- ros_topic_name: "/clock"
-  gz_topic_name: "/clock"
-  ros_type_name: "rosgraph_msgs/msg/Clock"
-  gz_type_name: "gz.msgs.Clock"
-  direction: GZ_TO_ROS
-
-- ros_topic_name: "/joint_states"
-  gz_topic_name: "/world/test_world/model/<robot_name>/joint_state"
-  ros_type_name: "sensor_msgs/msg/JointState"
-  gz_type_name: "gz.msgs.Model"
-  direction: GZ_TO_ROS
-
-- ros_topic_name: "/tf"
-  gz_topic_name: "/model/<robot_name>/tf"
-  ros_type_name: "tf2_msgs/msg/TFMessage"
-  gz_type_name: "gz.msgs.Pose_V"
-  direction: GZ_TO_ROS
-
-- ros_topic_name: "/cmd_vel"
-  gz_topic_name: "/model/<robot_name>/cmd_vel"
-  ros_type_name: "geometry_msgs/msg/Twist"
-  gz_type_name: "gz.msgs.Twist"
-  direction: ROS_TO_GZ
-```
-
 ## launch/gazebo.launch.xml
 
 ```xml

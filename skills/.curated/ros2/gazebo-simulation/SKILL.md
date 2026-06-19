@@ -46,6 +46,10 @@ Use diagnose for requests to check, inspect, validate, debug, or find errors in 
 
 Completion criterion: all `ERROR` findings are fixed or reported as blockers. Treat `WARN` findings as simulation-readiness gaps and `INFO` findings as package facts.
 
+## Bridge Type Reference
+
+Load [references/bridge.md](references/bridge.md) when composing or reviewing `gazebo_bridge.yaml` entries to verify that ROS type and Gazebo type pairings are valid.
+
 ## Launch Adaptation
 
 Load [references/templates.md](references/templates.md) when creating or adapting Gazebo launch files, bridge YAML, world files, or `<name>_gazebo.xacro`. For existing launch files:

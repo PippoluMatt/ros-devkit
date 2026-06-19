@@ -62,6 +62,18 @@ _Avoid_: Custom workspace, user workspace
 A vcs-tool YAML file that lists git repositories to clone into an overlay workspace's `src/`. Read by `vcs import`. The Dockerfile in the `ros2-dockerfile` skill fetches this file from a URL passed via the `OVERLAY_REPOS_URL` build-arg.
 _Avoid_: repos file, rosdistro file
 
+**Bridge type table**:
+The authoritative mapping of ROS 2 message types to Gazebo transport types that `ros_gz_bridge` can bridge. Sourced from the `ros_gz_bridge` README. Used by the AI to compose valid `gazebo_bridge.yaml` entries and by the diagnose script to validate pairings.
+_Avoid_: bridge map, type list, type matrix
+
+**Bridge entry**:
+A single mapping in `gazebo_bridge.yaml` consisting of a ROS topic name, Gazebo topic name, ROS type name, Gazebo type name, and direction. The ROS type and Gazebo type must form a valid pair per the bridge type table.
+_Avoid_: bridge row, bridge item, bridge mapping
+
+**Default bridge set**:
+The four bridge entries scaffolded by `--setup` (`/clock`, `/joint_states`, `/tf`, `/cmd_vel`). A sensible starting point but not the only valid configuration; the diagnose script validates entry pairings against the bridge type table rather than mandating this set.
+_Avoid_: expected bridges, required bridges, standard bridges
+
 ## Example Dialogue
 
 > **Dev**: I need a skill that writes a CMakeLists.txt for a hardware interface package.
