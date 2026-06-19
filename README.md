@@ -109,6 +109,7 @@ scripts/configure_ros_devkit.sh --agent custom --namespace-root /path/to/skills/
 | Command | Description |
 | --- | --- |
 | `description-scaffold` | Dispatched to skill script — scaffold, verify, or split URDF/xacro packages |
+| `gazebo-simulation` | Dispatched to skill script — set up or diagnose ROS2 Gazebo simulation wiring |
 | `doctor` | Built-in — check config and validate that mapped scripts exist |
 | `update` | Built-in — update an installer-managed install from latest `main` |
 | `--help` | Show available commands |
@@ -127,6 +128,18 @@ scripts/configure_ros_devkit.sh --agent custom --namespace-root /path/to/skills/
 ros-devkit description-scaffold --verify
 ros-devkit description-scaffold --create my_robot --sensors camera,lidar --destination-directory ~/ros2_ws/src
 ros-devkit description-scaffold --split
+```
+
+### gazebo-simulation
+
+| Mode | Description |
+| --- | --- |
+| `--diagnose [path]` | Inspect Gazebo xacro, physics tags, bringup launch wiring, and `config/gazebo_bridge.yaml` |
+| `--setup [path]` | Add only missing Gazebo scaffold files without overwriting existing files |
+
+```bash
+ros-devkit gazebo-simulation --diagnose
+ros-devkit gazebo-simulation --setup ~/ros2_ws/src --robot-name my_robot
 ```
 
 ### doctor
@@ -158,6 +171,7 @@ installs should be updated by pulling the checkout and reinstalling locally.
 | | [`launch`](skills/.curated/ros2/launch/SKILL.md) | Create and debug ROS2 launch files |
 | | [`ros2-sensor`](skills/.curated/ros2/ros2-sensor/SKILL.md) | Create and review ROS2 sensor interfaces |
 | **Robot Description & Control** | [`description-scaffold`](skills/.curated/ros2/description-scaffold/SKILL.md) | Scaffold and validate ROS2 URDF/xacro description packages |
+| | [`gazebo-simulation`](skills/.curated/ros2/gazebo-simulation/SKILL.md) | Set up and diagnose ROS2 Gazebo simulation wiring |
 | | [`ros2-control`](skills/.curated/ros2/ros2-control/SKILL.md) | Create ROS2 control plugins and xacro |
 | **MCU & Embedded** | [`mcu-freertos`](skills/.curated/ros2/mcu-freertos/SKILL.md) | Build and maintain MCU RTOS firmware |
 | | [`mcu-protocol`](skills/.curated/ros2/mcu-protocol/SKILL.md) | Design MCU wire protocols for ROS2 |
@@ -174,10 +188,11 @@ depend on node interfaces.
 ```
 ros-devkit/
 ├── src/ros_devkit/          # CLI dispatcher package
-├── skills/.curated/ros2/    # Curated skill collection (10 skills)
+├── skills/.curated/ros2/    # Curated skill collection (11 skills)
 │   ├── cmakelists/
 │   ├── cpp-node/
 │   ├── description-scaffold/
+│   ├── gazebo-simulation/
 │   ├── launch/
 │   ├── mcu-freertos/
 │   ├── mcu-protocol/

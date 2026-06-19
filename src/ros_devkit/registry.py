@@ -16,4 +16,8 @@ COMMANDS: dict[str, SkillCommand] = {
         name="description-scaffold",
         script_path="description-scaffold/scripts/description_scaffold.py",
     ),
+    "gazebo-simulation": SkillCommand(
+        name="gazebo-simulation",
+        script_path="gazebo-simulation/scripts/gazebo_simulation.py",
+    ),
 }

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Gazebo Simulation"
+  short_description: "Setup and diagnose ROS2 Gazebo simulation"
+  default_prompt: "Use $gazebo-simulation to diagnose a ROS2 Gazebo simulation setup."
