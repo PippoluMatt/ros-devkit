@@ -2,6 +2,8 @@
 
 **/test*
 !tests/
+!tests/test_config.py
+!tests/test_install.py
 !tests/test_update.py
 **/__pycache__/
 **/.agents/

@@ -48,6 +48,19 @@ The installer stops before changing anything if the target `ros2` namespace
 already exists. It also refuses to replace an existing `~/.local/bin/ros-devkit`
 unless that command already points at the installer-managed venv.
 
+If `ros-devkit doctor` reports `command not found` after installation, the
+installer-managed command is probably outside your `PATH`. Run it directly:
+
+```bash
+~/.local/bin/ros-devkit doctor
+```
+
+Then add this to your shell profile if needed:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
 For non-interactive installs:
 
 ```bash
@@ -89,16 +102,29 @@ ros-devkit update --force
 
 ### Local development install
 
-From a local checkout:
+Keep the installer-managed command as the stable system command. From a local
+checkout, use the dev runner to execute checkout code and checkout skills
+without copying skills, writing config, or replacing `~/.local/bin/ros-devkit`:
 
 ```bash
-python3 -m pip install .
-mkdir -p ~/.codex/skills/ros2
-cp -r skills/.curated/ros2/. ~/.codex/skills/ros2/
-scripts/configure_ros_devkit.sh --agent codex
+cd ~/ros-devkit
+scripts/dev_ros_devkit.sh doctor
+scripts/dev_ros_devkit.sh description-scaffold --verify
 ```
 
-To configure a custom namespace root directly:
+Do not install the checkout into your user or global Python when you also use
+the installer-managed command; both can create a `ros-devkit` executable in a
+shared bin directory. If you need an editable Python install, put it in a local
+venv and point it at the checkout skills explicitly:
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -e .
+ROS_DEVKIT_SKILL_ROOT="$PWD/skills/.curated/ros2" .venv/bin/ros-devkit doctor
+```
+
+To configure the stable command to use a custom installed namespace root
+directly:
 
 ```bash
 scripts/configure_ros_devkit.sh --agent custom --namespace-root /path/to/skills/ros2

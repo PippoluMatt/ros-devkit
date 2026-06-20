@@ -37,24 +37,30 @@ def default_config_file() -> Path:
 
 def load_config(config_file: Path | None = None) -> RosDevkitConfig:
     path = (config_file or default_config_file()).expanduser()
+    agent_override = os.environ.get("ROS_DEVKIT_AGENT", "").strip()
+    skill_root_override = os.environ.get("ROS_DEVKIT_SKILL_ROOT", "").strip()
+
     if not path.exists():
+        if skill_root_override:
+            return RosDevkitConfig(
+                agent=agent_override or "custom",
+                skill_root=Path(skill_root_override).expanduser(),
+                config_file=path,
+            )
+
         raise ConfigError(
             f"Config file not found: {path}\n"
             "Run scripts/configure_ros_devkit.sh --agent codex"
         )
 
     values = _parse_env_file(path)
-    agent = values.get("ROS_DEVKIT_AGENT", "").strip()
-    skill_root = values.get("ROS_DEVKIT_SKILL_ROOT", "").strip()
+    agent = agent_override or values.get("ROS_DEVKIT_AGENT", "").strip()
+    skill_root = skill_root_override or values.get("ROS_DEVKIT_SKILL_ROOT", "").strip()
 
     if not agent:
         raise ConfigError(f"Missing ROS_DEVKIT_AGENT in config file: {path}")
     if not skill_root:
         raise ConfigError(f"Missing ROS_DEVKIT_SKILL_ROOT in config file: {path}")
-
-    skill_root_override = os.environ.get("ROS_DEVKIT_SKILL_ROOT")
-    if skill_root_override:
-        skill_root = skill_root_override
 
     return RosDevkitConfig(
         agent=agent,

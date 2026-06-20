@@ -446,7 +446,11 @@ warn_path() {
     *":$BIN_DIR:"*)
       ;;
     *)
-      printf 'WARNING: %s is not on PATH. Add it to run ros-devkit directly.\n' "$BIN_DIR" >&2
+      printf 'WARNING: %s is not on PATH.\n' "$BIN_DIR" >&2
+      printf 'Run this command now, or add it to your shell profile:\n' >&2
+      printf '  export PATH="%s:$PATH"\n' "$BIN_DIR" >&2
+      printf 'Until then, run ros-devkit directly with:\n' >&2
+      printf '  %s doctor\n' "$BIN_PATH" >&2
       ;;
   esac
 }
