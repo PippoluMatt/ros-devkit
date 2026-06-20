@@ -7,3 +7,10 @@
 **/.agents/
 **/.codex/
 **/build/
+
+# Local development installs
+/.dev-venv/
+/agent/
+/.install/
+/.local/
+**.test-install/

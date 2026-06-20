@@ -89,19 +89,116 @@ ros-devkit update --force
 
 ### Local development install
 
-From a local checkout:
+Developers can test the CLI and skills locally without colliding with an
+installer-managed (production) install. All three collision points — the
+managed source/venv directory, the `ros-devkit` command symlink, and the
+installed skill namespace — are redirected to paths inside the local clone.
+
+The repository `.gitignore` already ignores the development directories used
+below (`.dev-venv/`, `agent/`, `.install/`, `.local/`).
+
+#### From a local checkout
+
+This is the primary development workflow — edit code, reinstall, and test in
+seconds.
+
+1. **Create and activate a virtual environment** inside the clone:
 
 ```bash
-python3 -m pip install .
-mkdir -p ~/.codex/skills/ros2
-cp -r skills/.curated/ros2/. ~/.codex/skills/ros2/
-scripts/configure_ros_devkit.sh --agent codex
+cd ~/ros-devkit               # your local clone
+python3 -m venv .dev-venv
+source .dev-venv/bin/activate
 ```
 
-To configure a custom namespace root directly:
+2. **Install the CLI package** (editable, so code changes take effect without
+   reinstalling):
 
 ```bash
-scripts/configure_ros_devkit.sh --agent custom --namespace-root /path/to/skills/ros2
+pip install -e .
+```
+
+3. **Install skills to a local directory** (keeps production skills untouched):
+
+```bash
+mkdir -p agent/skills/ros2
+cp -r skills/.curated/ros2/. agent/skills/ros2/
+```
+
+4. **Configure the CLI** to dispatch from the local skill root:
+
+```bash
+scripts/configure_ros_devkit.sh --agent custom --namespace-root "$PWD/agent/skills/ros2"
+```
+
+5. **Verify and test manually**:
+
+```bash
+ros-devkit doctor                          # validate config and script mapping
+ros-devkit description-scaffold --verify   # run a skill end-to-end
+ros-devkit gazebo-simulation --diagnose    # exercise another skill
+```
+
+#### Iterating on changes
+
+The editable install (`pip install -e .`) means changes to `src/` are live
+immediately — just re-run the command. However, the CLI dispatches skill
+scripts from the **copy** in `agent/skills/ros2/`, not from the curated source
+in `skills/.curated/ros2/`. After editing skill scripts, re-sync the copy:
+
+```bash
+rsync -a --delete skills/.curated/ros2/ agent/skills/ros2/
+```
+
+Use `--delete` so removed files don't linger in the dispatch copy. If `rsync`
+is unavailable, `cp -rf` works but leaves stale files behind:
+
+```bash
+rm -rf agent/skills/ros2 && cp -r skills/.curated/ros2 agent/skills/ros2
+```
+
+Then re-run the command to test your changes before committing.
+
+When you're done developing, restore the production configuration:
+
+```bash
+# from the managed source checkout or a production clone:
+scripts/configure_ros_devkit.sh --agent codex   # or claude / pi
+```
+
+#### Testing a remote branch with the installer
+
+To test a feature branch end-to-end through the installer (without a local
+checkout), use the curl-piped installer with all three paths overridden so
+nothing touches the production install:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/PippoluMatt/ros-devkit/main/scripts/install.sh \
+  | ROS_DEVKIT_INSTALL_HOME="$HOME/ros-devkit/.install" \
+    ROS_DEVKIT_BIN_DIR="$HOME/ros-devkit/.local/bin" \
+    bash -s -- \
+      --agent custom \
+      --skill-root "$HOME/ros-devkit/agent/skills" \
+      --ref feature/my-branch
+```
+
+| Override | Default (production) | Development value |
+| --- | --- | --- |
+| `ROS_DEVKIT_INSTALL_HOME` | `~/.local/share/ros-devkit` | `~/ros-devkit/.install` |
+| `ROS_DEVKIT_BIN_DIR` | `~/.local/bin` | `~/ros-devkit/.local/bin` |
+| `--skill-root` | `~/.codex/skills` etc. | `~/ros-devkit/agent/skills` |
+| `--ref` | `main` | any branch, tag, or ref |
+
+Invoke the dev binary directly (it is not on `PATH`):
+
+```bash
+~/ros-devkit/.local/bin/ros-devkit doctor
+```
+
+When finished, remove the dev install and restore the production config:
+
+```bash
+rm -rf ~/ros-devkit/.install ~/ros-devkit/.local/bin/ros-devkit ~/ros-devkit/agent/skills/ros2
+scripts/configure_ros_devkit.sh --agent codex   # or claude / pi
 ```
 
 ## CLI reference
