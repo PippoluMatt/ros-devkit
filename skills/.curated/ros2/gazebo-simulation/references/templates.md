@@ -93,3 +93,61 @@ Include it from `urdf/main.xacro`:
 ```xml
 <xacro:include filename="$(find <robot_name>_description)/urdf/<robot_name>_gazebo.xacro" />
 ```
+
+## Adding Gazebo System Plugins
+
+### Model-level plugins (in the gazebo xacro)
+
+Model-level plugins are added inside `<gazebo>` tags in `<robot_name>_gazebo.xacro`. Example for `DiffDrive`:
+
+```xml
+<gazebo>
+    <plugin filename="gz-sim-diff-drive-system" name="gz::sim::systems::DiffDrive">
+        <left_joint>wheel_left_joint</left_joint>
+        <right_joint>wheel_right_joint</right_joint>
+        <wheel_separation>0.4</wheel_separation>
+        <wheel_radius>0.1</wheel_radius>
+    </plugin>
+</gazebo>
+```
+
+Example for `JointTrajectoryController`:
+
+```xml
+<gazebo>
+    <plugin filename="gz-sim-joint-trajectory-controller-system" name="gz::sim::systems::JointTrajectoryController">
+        <joint_name>joint_1</joint_name>
+        <position_p_gain>100</position_p_gain>
+    </plugin>
+</gazebo>
+```
+
+### Sensor and world-level plugins (in the world .sdf)
+
+Sensor system plugins are added as `<plugin .../>` lines inside the `<world>` tag of the `.sdf` file in `worlds/`. Example for `IMU`:
+
+```xml
+<plugin filename="gz-sim-imu-system" name="gz::sim::systems::Imu"/>
+```
+
+Example for `ForceTorque`:
+
+```xml
+<plugin name="gz::sim::systems::ForceTorque" filename="gz-sim-forcetorque-system"/>
+```
+
+### Sensors system plugin (for rendering sensors)
+
+When the robot has rendering sensors (lidar, camera, depth_camera, rgbd_camera, gpu_lidar, thermal_camera, segmentation_camera, boundingbox_camera), add this block inside `<world>` in the `.sdf` file:
+
+```xml
+<plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+  <render_engine>ogre2</render_engine>
+</plugin>
+```
+
+### Plugin naming conventions
+
+- **filename**: `gz-sim-<cmake_name>-system` (all lowercase, dashes). The cmake name comes from the first argument to `gz_add_system()` in the plugin's `CMakeLists.txt` in the [gz-sim repository](https://github.com/gazebosim/gz-sim/tree/main/src/systems).
+- **name**: `gz::sim::systems::<ClassName>` found in the last line of the `.cc` file via the `GZ_ADD_PLUGIN_ALIAS` macro.
+- The full plugin registry is in [plugin_registry.yaml](plugin_registry.yaml).

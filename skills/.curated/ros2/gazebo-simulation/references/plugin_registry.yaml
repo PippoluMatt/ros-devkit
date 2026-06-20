@@ -1,0 +1,452 @@
+# Gazebo Sim Plugin Registry
+#
+# Each entry maps a user-friendly alias to the plugin's details:
+#
+#   filename    : shared library name (used in the filename="..." attribute)
+#   name        : C++ fully-qualified class name (used in the name="..." attribute)
+#   category    : "model"  → added to <gazebo> in the robot xacro
+#                 "sensor" → added as a <plugin> line to the world .sdf
+#                 "world"  → added as a <plugin> line to the world .sdf (non-sensor)
+#   needs_sensors_system: true if the Sensors system plugin (with render engine)
+#                         must also be present in the world .sdf
+#   description : short human-readable summary shown by --list-plugins
+#   github_dir   : directory name under src/systems/ in the gz-sim repository
+#   github_file  : .cc filename (last line contains GZ_ADD_PLUGIN_ALIAS)
+#
+# The filename convention is: gz-sim-<cmake_name>-system
+# The name convention is:    gz::sim::systems::<ClassName>
+#
+# To add a new plugin that is not listed here, the tool can fetch the last line
+# of the .cc file from GitHub to extract the name, and derive the filename
+# from the CMakeLists.txt gz_add_system() call.
+
+# ── Model-level plugins (go in <gazebo> tag of the robot xacro) ──────────────
+
+ackermann_steering:
+  filename: gz-sim-ackermann-steering-system
+  name: gz::sim::systems::AckermannSteering
+  category: model
+  needs_sensors_system: false
+  description: Ackermann steering controller for vehicles with left/right wheels
+  github_dir: ackermann_steering
+  github_file: AckermannSteering.cc
+
+diff_drive:
+  filename: gz-sim-diff-drive-system
+  name: gz::sim::systems::DiffDrive
+  category: model
+  needs_sensors_system: false
+  description: Differential drive controller for mobile robots
+  github_dir: diff_drive
+  github_file: DiffDrive.cc
+
+joint_controller:
+  filename: gz-sim-joint-controller-system
+  name: gz::sim::systems::JointController
+  category: model
+  needs_sensors_system: false
+  description: Velocity or force controller for a single joint
+  github_dir: joint_controller
+  github_file: JointController.cc
+
+joint_position_controller:
+  filename: gz-sim-joint-position-controller-system
+  name: gz::sim::systems::JointPositionController
+  category: model
+  needs_sensors_system: false
+  description: PID position controller for a single joint
+  github_dir: joint_position_controller
+  github_file: JointPositionController.cc
+
+joint_trajectory_controller:
+  filename: gz-sim-joint-trajectory-controller-system
+  name: gz::sim::systems::JointTrajectoryController
+  category: model
+  needs_sensors_system: false
+  description: Multi-joint trajectory following (compatible with MoveIt2)
+  github_dir: joint_traj_control
+  github_file: JointTrajectoryController.cc
+
+joint_state_publisher:
+  filename: gz-sim-joint-state-publisher-system
+  name: gz::sim::systems::JointStatePublisher
+  category: model
+  needs_sensors_system: false
+  description: Publishes joint positions/velocities over gz transport
+  github_dir: joint_state_publisher
+  github_file: JointStatePublisher.cc
+
+mecanum_drive:
+  filename: gz-sim-mecanum-drive-system
+  name: gz::sim::systems::MecanumDrive
+  category: model
+  needs_sensors_system: false
+  description: Mecanum-wheel omnidirectional drive controller
+  github_dir: mecanum_drive
+  github_file: MecanumDrive.cc
+
+odometry_publisher:
+  filename: gz-sim-odometry-publisher-system
+  name: gz::sim::systems::OdometryPublisher
+  category: model
+  needs_sensors_system: false
+  description: Publishes 2D/3D odometry for any entity
+  github_dir: odometry_publisher
+  github_file: OdometryPublisher.cc
+
+velocity_control:
+  filename: gz-sim-velocity-control-system
+  name: gz::sim::systems::VelocityControl
+  category: model
+  needs_sensors_system: false
+  description: Direct linear/angular velocity controller for a model
+  github_dir: velocity_control
+  github_file: VelocityControl.cc
+
+lift_drag:
+  filename: gz-sim-lift-drag-system
+  name: gz::sim::systems::LiftDrag
+  category: model
+  needs_sensors_system: false
+  description: Basic lift/drag aerodynamic forces
+  github_dir: lift_drag
+  github_file: LiftDrag.cc
+
+advanced_lift_drag:
+  filename: gz-sim-advanced-lift-drag-system
+  name: gz::sim::systems::AdvancedLiftDrag
+  category: model
+  needs_sensors_system: false
+  description: Advanced lift/drag with stall and control surface modeling
+  github_dir: advanced_lift_drag
+  github_file: AdvancedLiftDrag.cc
+
+multicopter_motor_model:
+  filename: gz-sim-multicopter-motor-model-system
+  name: gz::sim::systems::MulticopterMotorModel
+  category: model
+  needs_sensors_system: false
+  description: Thrust model for multicopter propellers
+  github_dir: multicopter_motor_model
+  github_file: MulticopterMotorModel.cc
+
+multicopter_velocity_control:
+  filename: gz-sim-multicopter-velocity-control-system
+  name: gz::sim::systems::MulticopterVelocityControl
+  category: model
+  needs_sensors_system: false
+  description: Velocity controller for multicopters (body-frame linear + yaw)
+  github_dir: multicopter_control
+  github_file: MulticopterVelocityControl.cc
+
+thruster:
+  filename: gz-sim-thruster-system
+  name: gz::sim::systems::Thruster
+  category: model
+  needs_sensors_system: false
+  description: Maritime thruster model (force or angular velocity command)
+  github_dir: thruster
+  github_file: Thruster.cc
+
+trajectory_follower:
+  filename: gz-sim-trajectory-follower-system
+  name: gz::sim::systems::TrajectoryFollower
+  category: model
+  needs_sensors_system: false
+  description: 2D waypoint-based trajectory following for a model
+  github_dir: trajectory_follower
+  github_file: TrajectoryFollower.cc
+
+tracked_vehicle:
+  filename: gz-sim-tracked-vehicle-system
+  name: gz::sim::systems::TrackedVehicle
+  category: model
+  needs_sensors_system: false
+  description: Tracked vehicle controller (left/right tracks)
+  github_dir: tracked_vehicle
+  github_file: TrackedVehicle.cc
+
+detachable_joint:
+  filename: gz-sim-detachable-joint-system
+  name: gz::sim::systems::DetachableJoint
+  category: model
+  needs_sensors_system: false
+  description: Fixed joint between two models that can be detached at runtime
+  github_dir: detachable_joint
+  github_file: DetachableJoint.cc
+
+apply_joint_force:
+  filename: gz-sim-apply-joint-force-system
+  name: gz::sim::systems::ApplyJointForce
+  category: model
+  needs_sensors_system: false
+  description: Apply a force to the first axis of a specified joint
+  github_dir: apply_joint_force
+  github_file: ApplyJointForce.cc
+
+apply_link_wrench:
+  filename: gz-sim-apply-link-wrench-system
+  name: gz::sim::systems::ApplyLinkWrench
+  category: world
+  needs_sensors_system: false
+  description: Apply forces/torques to links via gz transport topics
+  github_dir: apply_link_wrench
+  github_file: ApplyLinkWrench.cc
+
+# ── Sensor system plugins (go in the world .sdf and may need Sensors system) ─
+
+imu:
+  filename: gz-sim-imu-system
+  name: gz::sim::systems::Imu
+  category: sensor
+  needs_sensors_system: false
+  description: IMU sensor — orientation, angular velocity, linear acceleration
+  github_dir: imu
+  github_file: Imu.cc
+
+air_pressure:
+  filename: gz-sim-air-pressure-system
+  name: gz::sim::systems::AirPressure
+  category: sensor
+  needs_sensors_system: false
+  description: Air pressure sensor — vertical position and velocity
+  github_dir: air_pressure
+  github_file: AirPressure.cc
+
+air_speed:
+  filename: gz-sim-air-speed-system
+  name: gz::sim::systems::AirSpeed
+  category: sensor
+  needs_sensors_system: false
+  description: Air speed sensor
+  github_dir: air_speed
+  github_file: AirSpeed.cc
+
+altimeter:
+  filename: gz-sim-altimeter-system
+  name: gz::sim::systems::Altimeter
+  category: sensor
+  needs_sensors_system: false
+  description: Altimeter sensor — vertical position and velocity
+  github_dir: altimeter
+  github_file: Altimeter.cc
+
+contact:
+  filename: gz-sim-contact-system
+  name: gz::sim::systems::Contact
+  category: sensor
+  needs_sensors_system: false
+  description: Contact sensor — collision detection between bodies
+  github_dir: contact
+  github_file: Contact.cc
+
+force_torque:
+  filename: gz-sim-forcetorque-system
+  name: gz::sim::systems::ForceTorque
+  category: sensor
+  needs_sensors_system: false
+  description: Force-torque sensor — measures wrench on a joint
+  github_dir: force_torque
+  github_file: ForceTorque.cc
+
+magnetometer:
+  filename: gz-sim-magnetometer-system
+  name: gz::sim::systems::Magnetometer
+  category: sensor
+  needs_sensors_system: false
+  description: Magnetometer sensor — magnetic field readings
+  github_dir: magnetometer
+  github_file: Magnetometer.cc
+
+navsat:
+  filename: gz-sim-navsat-system
+  name: gz::sim::systems::NavSat
+  category: sensor
+  needs_sensors_system: false
+  description: GPS / NavSat sensor — latitude, longitude, altitude
+  github_dir: navsat
+  github_file: NavSat.cc
+
+logical_camera:
+  filename: gz-sim-logical-camera-system
+  name: gz::sim::systems::LogicalCamera
+  category: sensor
+  needs_sensors_system: false
+  description: Logical camera — detects models inside a frustum (no rendering)
+  github_dir: logical_camera
+  github_file: LogicalCamera.cc
+
+dvl:
+  filename: gz-sim-dvl-system
+  name: gz::sim::systems::DopplerVelocityLogSystem
+  category: sensor
+  needs_sensors_system: false
+  description: Doppler Velocity Log — underwater velocity measurement
+  github_dir: dvl
+  github_file: DopplerVelocityLog.cc
+
+# Sensors that require rendering (need the Sensors system plugin with render engine)
+
+lidar:
+  filename: gz-sim-sensors-system
+  name: gz::sim::systems::Sensors
+  category: sensor
+  needs_sensors_system: true
+  description: LiDAR sensor — laser range data (requires ogre2 rendering)
+  github_dir: sensors
+  github_file: Sensors.cc
+
+camera:
+  filename: gz-sim-sensors-system
+  name: gz::sim::systems::Sensors
+  category: sensor
+  needs_sensors_system: true
+  description: RGB camera sensor (requires ogre2 rendering)
+  github_dir: sensors
+  github_file: Sensors.cc
+
+rgbd_camera:
+  filename: gz-sim-sensors-system
+  name: gz::sim::systems::Sensors
+  category: sensor
+  needs_sensors_system: true
+  description: RGB-D camera sensor (requires ogre2 rendering)
+  github_dir: sensors
+  github_file: Sensors.cc
+
+depth_camera:
+  filename: gz-sim-sensors-system
+  name: gz::sim::systems::Sensors
+  category: sensor
+  needs_sensors_system: true
+  description: Depth camera sensor (requires ogre2 rendering)
+  github_dir: sensors
+  github_file: Sensors.cc
+
+gpu_lidar:
+  filename: gz-sim-sensors-system
+  name: gz::sim::systems::Sensors
+  category: sensor
+  needs_sensors_system: true
+  description: GPU LiDAR sensor — GPU-accelerated laser range data (requires ogre2)
+  github_dir: sensors
+  github_file: Sensors.cc
+
+thermal_camera:
+  filename: gz-sim-sensors-system
+  name: gz::sim::systems::Sensors
+  category: sensor
+  needs_sensors_system: true
+  description: Thermal camera sensor (requires ogre2 rendering)
+  github_dir: sensors
+  github_file: Sensors.cc
+
+segmentation_camera:
+  filename: gz-sim-sensors-system
+  name: gz::sim::systems::Sensors
+  category: sensor
+  needs_sensors_system: true
+  description: Segmentation camera — per-pixel class labels (requires ogre2)
+  github_dir: sensors
+  github_file: Sensors.cc
+
+boundingbox_camera:
+  filename: gz-sim-sensors-system
+  name: gz::sim::systems::Sensors
+  category: sensor
+  needs_sensors_system: true
+  description: Bounding-box camera — 2D detection boxes (requires ogre2)
+  github_dir: sensors
+  github_file: Sensors.cc
+
+# ── World-level plugins (non-sensor, go in the world .sdf) ────────────────────
+
+physics:
+  filename: gz-sim-physics-system
+  name: gz::sim::systems::Physics
+  category: world
+  needs_sensors_system: false
+  description: Core physics engine (required — already in scaffold world)
+  github_dir: physics
+  github_file: Physics.cc
+
+user_commands:
+  filename: gz-sim-user-commands-system
+  name: gz::sim::systems::UserCommands
+  category: world
+  needs_sensors_system: false
+  description: Transport interface for runtime commands (required in scaffold)
+  github_dir: user_commands
+  github_file: UserCommands.cc
+
+scene_broadcaster:
+  filename: gz-sim-scene-broadcaster-system
+  name: gz::sim::systems::SceneBroadcaster
+  category: world
+  needs_sensors_system: false
+  description: Publishes scene updates for the GUI (required in scaffold)
+  github_dir: scene_broadcaster
+  github_file: SceneBroadcaster.cc
+
+pose_publisher:
+  filename: gz-sim-pose-publisher-system
+  name: gz::sim::systems::PosePublisher
+  category: world
+  needs_sensors_system: false
+  description: Publishes child-entity transforms as Pose / Pose_V messages
+  github_dir: pose_publisher
+  github_file: PosePublisher.cc
+
+triggered_publisher:
+  filename: gz-sim-triggered-publisher-system
+  name: gz::sim::systems::TriggeredPublisher
+  category: world
+  needs_sensors_system: false
+  description: Publishes a configured output message when an input is received
+  github_dir: triggered_publisher
+  github_file: TriggeredPublisher.cc
+
+touch_plugin:
+  filename: gz-sim-touchplugin-system
+  name: gz::sim::systems::TouchPlugin
+  category: model
+  needs_sensors_system: false
+  description: Publishes a message when a model touches a target
+  github_dir: touch_plugin
+  github_file: TouchPlugin.cc
+
+buoyancy:
+  filename: gz-sim-buoyancy-system
+  name: gz::sim::systems::Buoyancy
+  category: world
+  needs_sensors_system: false
+  description: Buoyancy forces for objects immersed in fluid
+  github_dir: buoyancy
+  github_file: Buoyancy.cc
+
+hydrodynamics:
+  filename: gz-sim-hydrodynamics-system
+  name: gz::sim::systems::Hydrodynamics
+  category: model
+  needs_sensors_system: false
+  description: Hydrodynamic damping and current forces for underwater vehicles
+  github_dir: hydrodynamics
+  github_file: Hydrodynamics.cc
+
+wind_effects:
+  filename: gz-sim-wind-effects-system
+  name: gz::sim::systems::WindEffects
+  category: world
+  needs_sensors_system: false
+  description: Uniform wind model publishing ground-truth wind info
+  github_dir: wind_effects
+  github_file: WindEffects.cc
+
+particle_emitter:
+  filename: gz-sim-particle-emitter-system
+  name: gz::sim::systems::ParticleEmitter
+  category: model
+  needs_sensors_system: false
+  description: Manages particle emitters (smoke, fire, etc.)
+  github_dir: particle_emitter
+  github_file: ParticleEmitter.cc
