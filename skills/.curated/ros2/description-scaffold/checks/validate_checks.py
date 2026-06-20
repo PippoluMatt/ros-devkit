@@ -33,9 +33,9 @@ class DescriptionScaffoldValidateChecks(unittest.TestCase):
 
             self.assertFalse(valid)
             self.assertIn(
-                "WARN: Entry point missing; cannot verify standard includes for "
-                "extra xacro files: urdf/base.xacro, urdf/common.xacro, "
-                "urdf/wheels.xacro",
+                "WARN: [my_robot_description] Entry point missing; cannot verify "
+                "standard includes for extra xacro files: urdf/base.xacro, "
+                "urdf/common.xacro, urdf/wheels.xacro",
                 output.getvalue(),
             )
 
@@ -55,6 +55,22 @@ class DescriptionScaffoldValidateChecks(unittest.TestCase):
         self.assertEqual(
             validate_module._format_severity("ERROR", color=False),
             "ERROR",
+        )
+
+    def test_print_finding_includes_source(self) -> None:
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            validate_module._print_finding(
+                "WARN",
+                "CMakeLists.txt does not install present package directories: config",
+                color=False,
+                source="my_robot_description",
+            )
+
+        self.assertEqual(
+            output.getvalue(),
+            "WARN: [my_robot_description] "
+            "CMakeLists.txt does not install present package directories: config\n",
         )
 
     def _write_package(self, pkg_dir: Path) -> None:
