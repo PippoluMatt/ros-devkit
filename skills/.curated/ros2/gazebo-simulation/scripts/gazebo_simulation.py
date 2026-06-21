@@ -10,6 +10,8 @@ import re
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
+import urllib.request
+import urllib.error
 
 SHARED_SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
 sys.path.insert(0, str(SHARED_SCRIPTS))
@@ -18,6 +20,12 @@ from cmake import add_install_share_directories  # noqa: E402
 from diagnostics import Finding, print_finding  # noqa: E402
 
 DISCOVERY_SKIP_DIRS = {".git", ".venv", "__pycache__", "build", "install", "log"}
+PLUGIN_REGISTRY_PATH = Path(__file__).resolve().parent.parent / "references" / "plugin_registry.yaml"
+GZ_SIM_RAW_BASE = "https://raw.githubusercontent.com/gazebosim/gz-sim/main/src/systems"
+SENSOR_PLUGIN_ALIASES = {
+    "lidar", "camera", "rgbd_camera", "depth_camera", "gpu_lidar",
+    "thermal_camera", "segmentation_camera", "boundingbox_camera",
+}
 BRINGUP_INSTALL_DIRS = ("launch", "config", "worlds")
 REQUIRED_BRIDGE_KEYS = {
     "ros_topic_name",
@@ -888,6 +896,465 @@ def _ensure_cmake_installs(
         _append_once(changed, _relative(cmake, root))
 
 
+# ── Plugin registry helpers ─────────────────────────────────────────────────
+
+def _load_plugin_registry() -> dict[str, dict[str, object]]:
+    """Load the plugin registry from references/plugin_registry.yaml.
+
+    Falls back to a simple parser if PyYAML is not installed.
+    """
+    if not PLUGIN_REGISTRY_PATH.exists():
+        return {}
+    text = PLUGIN_REGISTRY_PATH.read_text(encoding="utf-8")
+    try:
+        import yaml  # type: ignore
+        data = yaml.safe_load(text)
+        if isinstance(data, dict):
+            return {str(k): v for k, v in data.items() if isinstance(v, dict)}
+        return {}
+    except ImportError:
+        return _parse_simple_plugin_registry(text)
+
+
+def _parse_simple_plugin_registry(text: str) -> dict[str, dict[str, object]]:
+    """Minimal YAML parser for the flat plugin registry structure."""
+    registry: dict[str, dict[str, object]] = {}
+    current_key: str | None = None
+    current_entry: dict[str, object] = {}
+    for raw_line in text.splitlines():
+        line = raw_line.rstrip()
+        if not line.strip() or line.strip().startswith("#"):
+            continue
+        stripped = line.strip()
+        if not line.startswith(" "):
+            if current_key is not None:
+                registry[current_key] = current_entry
+            if stripped.endswith(":"):
+                current_key = stripped[:-1].strip()
+                current_entry = {}
+            else:
+                current_key = None
+                current_entry = {}
+        elif current_key is not None and ":" in stripped:
+            key, value = stripped.split(":", 1)
+            key = key.strip()
+            value = value.strip()
+            if value.lower() in ("true", "false"):
+                current_entry[key] = value.lower() == "true"
+            else:
+                current_entry[key] = value
+    if current_key is not None:
+        registry[current_key] = current_entry
+    return registry
+
+
+def _fetch_plugin_name_from_github(github_dir: str, github_file: str) -> str | None:
+    """Fetch the last non-empty line of the .cc file from GitHub.
+
+    The last line typically contains GZ_ADD_PLUGIN_ALIAS(ClassName, \"gz::sim::systems::ClassName\").
+    Returns the fully-qualified name, e.g. "gz::sim::systems::DiffDrive".
+    """
+    url = f"{GZ_SIM_RAW_BASE}/{github_dir}/{github_file}"
+    try:
+        with urllib.request.urlopen(url, timeout=15) as resp:
+            body = resp.read().decode("utf-8", errors="replace")
+    except (urllib.error.URLError, OSError):
+        return None
+    for line in reversed(body.splitlines()):
+        line = line.strip()
+        if not line:
+            continue
+        match = re.search(r'GZ_ADD_PLUGIN_ALIAS\s*\([^,]+,\s*"([^"]+)"\)', line)
+        if match:
+            return match.group(1)
+    return None
+
+
+def _resolve_plugin(plugin_alias: str) -> dict[str, object] | None:
+    """Look up a plugin by alias in the registry, or fetch from GitHub.
+
+    Returns a dict with keys: filename, name, category, needs_sensors_system.
+    Returns None if the plugin cannot be resolved.
+    """
+    registry = _load_plugin_registry()
+    entry = registry.get(plugin_alias)
+    if entry:
+        return entry
+    # Try fuzzy match: replace spaces/dashes/underscores
+    normalised = plugin_alias.lower().replace(" ", "_").replace("-", "_")
+    for key, value in registry.items():
+        if key.lower().replace(" ", "_").replace("-", "_") == normalised:
+            return value
+    return None
+
+
+def _format_plugin_block(plugin_filename: str, plugin_name: str) -> str:
+    """Render a <gazebo><plugin .../></gazebo> block for the robot xacro."""
+    return (
+        f'\n    <gazebo>\n'
+        f'        <plugin filename="{plugin_filename}" name="{plugin_name}">\n'
+        f'        </plugin>\n'
+        f'    </gazebo>\n'
+    )
+
+
+def _add_model_plugin_to_xacro(
+    gazebo_xacro_path: Path,
+    plugin_filename: str,
+    plugin_name: str,
+    changed: list[str],
+    root: Path,
+) -> bool:
+    """Insert (or merge) a <gazebo><plugin> block into the robot gazebo xacro.
+
+    Returns True if the file was modified.
+    """
+    if not gazebo_xacro_path.exists():
+        return False
+    content = gazebo_xacro_path.read_text(encoding="utf-8")
+    if plugin_filename in content and plugin_name in content:
+        return False
+    block = _format_plugin_block(plugin_filename, plugin_name)
+    if "</robot>" in content:
+        updated = content.replace("</robot>", f"{block}</robot>", 1)
+    else:
+        updated = content.rstrip() + "\n" + block
+    gazebo_xacro_path.write_text(updated, encoding="utf-8")
+    _append_once(changed, _relative(gazebo_xacro_path, root))
+    return True
+
+
+def _world_plugin_line(plugin_filename: str, plugin_name: str) -> str:
+    """Render a self-closing <plugin> line for the world SDF."""
+    return f'    <plugin filename="{plugin_filename}" name="{plugin_name}"/>'
+
+
+def _world_sensors_system_block() -> str:
+    """Render the Sensors system plugin block with ogre2 render engine."""
+    return (
+        '    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">\n'
+        '      <render_engine>ogre2</render_engine>\n'
+        '    </plugin>'
+    )
+
+
+def _add_world_plugin_to_sdf(
+    world_sdf_path: Path,
+    plugin_filename: str,
+    plugin_name: str,
+    changed: list[str],
+    root: Path,
+) -> bool:
+    """Add a <plugin> line inside the <world> tag of the world SDF.
+
+    Returns True if the file was modified.
+    """
+    if not world_sdf_path.exists():
+        return False
+    content = world_sdf_path.read_text(encoding="utf-8")
+    if plugin_filename in content and plugin_name in content:
+        return False
+    plugin_line = _world_plugin_line(plugin_filename, plugin_name)
+    # Insert after the last existing <plugin .../> line inside <world>,
+    # otherwise right after the opening <world ...> tag.
+    lines = content.splitlines()
+    insert_at = None
+    in_world = False
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith("<world") or stripped.startswith("<world "):
+            in_world = True
+        if in_world and "<plugin " in line and "/>" in line:
+            insert_at = index + 1
+        if in_world and stripped.startswith("</world>"):
+            break
+    if insert_at is None:
+        for index, line in enumerate(lines):
+            if "<world" in line:
+                insert_at = index + 1
+                break
+    if insert_at is None:
+        return False
+    lines.insert(insert_at, plugin_line)
+    world_sdf_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    _append_once(changed, _relative(world_sdf_path, root))
+    return True
+
+
+def _ensure_sensors_system_in_world(
+    world_sdf_path: Path,
+    changed: list[str],
+    root: Path,
+) -> bool:
+    """Ensure the Sensors system plugin (with ogre2 render engine) is in the world SDF.
+
+    Returns True if the file was modified.
+    """
+    if not world_sdf_path.exists():
+        return False
+    content = world_sdf_path.read_text(encoding="utf-8")
+    if "gz-sim-sensors-system" in content and "gz::sim::systems::Sensors" in content:
+        return False
+    block = _world_sensors_system_block()
+    lines = content.splitlines()
+    insert_at = None
+    in_world = False
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith("<world") or stripped.startswith("<world "):
+            in_world = True
+        if in_world and "<plugin " in line and "/>" in line:
+            insert_at = index + 1
+        if in_world and stripped.startswith("</world>"):
+            break
+    if insert_at is None:
+        for index, line in enumerate(lines):
+            if "<world" in line:
+                insert_at = index + 1
+                break
+    if insert_at is None:
+        return False
+    lines.insert(insert_at, block)
+    world_sdf_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    _append_once(changed, _relative(world_sdf_path, root))
+    return True
+
+
+def _list_available_plugins() -> str:
+    """Return a formatted, human-readable table of available plugins."""
+    registry = _load_plugin_registry()
+    if not registry:
+        return "  (plugin registry not found at references/plugin_registry.yaml)"
+
+    # Group by category preserving insertion order
+    categories: dict[str, list[tuple[str, dict[str, object]]]] = {
+        "model": [],
+        "sensor": [],
+        "world": [],
+    }
+    for alias, entry in registry.items():
+        cat = str(entry.get("category", "model"))
+        categories.setdefault(cat, []).append((alias, entry))
+
+    category_titles: list[tuple[str, str, str]] = [
+        ("model", "Model plugins", "added to <gazebo> in the robot xacro"),
+        ("sensor", "Sensor plugins", "added as <plugin/> in the world .sdf"),
+        ("world", "World plugins", "added as <plugin/> in the world .sdf"),
+    ]
+
+    lines: list[str] = []
+    for cat_key, title, subtitle in category_titles:
+        entries = categories.get(cat_key, [])
+        if not entries:
+            continue
+        lines.append("")
+        lines.append(f"  {title} ({subtitle})")
+        lines.append("")
+        # Column widths: alias | filename | name | description
+        alias_w = max(len(a) for a, _ in entries)
+        alias_w = max(alias_w, len("alias"))
+        file_w = max(len(str(e.get("filename", ""))) for _, e in entries)
+        file_w = max(file_w, len("filename"))
+        name_w = max(len(str(e.get("name", ""))) for _, e in entries)
+        name_w = max(name_w, len("name"))
+        desc_w = max(len(str(e.get("description", ""))) for _, e in entries)
+        desc_w = max(desc_w, len("description"))
+
+        # Header
+        lines.append(
+            f"  {'alias':<{alias_w}}  {'filename':<{file_w}}  {'name':<{name_w}}  {'description'}"
+        )
+        lines.append(
+            f"  {'─' * alias_w}  {'─' * file_w}  {'─' * name_w}  {'─' * desc_w}"
+        )
+        for alias, entry in entries:
+            filename = str(entry.get("filename", ""))
+            name = str(entry.get("name", ""))
+            desc = str(entry.get("description", ""))
+            lines.append(
+                f"  {alias:<{alias_w}}  {filename:<{file_w}}  {name:<{name_w}}  {desc}"
+            )
+
+    lines.append("")
+    lines.append("  Usage:  ros-devkit gazebo-simulation --add-plugin --plugin <alias>")
+    return "\n".join(lines)
+
+
+def add_plugin(args: argparse.Namespace) -> bool:
+    """Add a Gazebo system plugin to the robot's gazebo xacro and/or world SDF."""
+    plugin_alias = args.plugin
+    context = discover_context(args.path, args.description_package, args.bringup_package)
+    findings = [Finding("ERROR", error) for error in context.errors]
+    changed: list[str] = []
+
+    if args.list_plugins:
+        print("Available Gazebo Sim plugins:")
+        print(_list_available_plugins())
+        return True
+
+    if not plugin_alias:
+        findings.append(Finding("ERROR", "No plugin specified. Use --plugin <name> or --list-plugins."))
+        _print_report("ROS2 Gazebo Simulation — Add Plugin", context, findings)
+        return False
+
+    plugin = _resolve_plugin(plugin_alias)
+    if plugin is None:
+        findings.append(
+            Finding(
+                "ERROR",
+                f"Unknown plugin alias '{plugin_alias}'. Use --list-plugins to see available plugins.",
+            )
+        )
+        _print_report("ROS2 Gazebo Simulation — Add Plugin", context, findings)
+        return False
+
+    plugin_filename = str(plugin.get("filename", ""))
+    plugin_name = str(plugin.get("name", ""))
+    category = str(plugin.get("category", "model"))
+    needs_sensors = bool(plugin.get("needs_sensors_system", False))
+
+    # If the name is missing or generic, try to fetch from GitHub
+    if not plugin_name and plugin.get("github_dir") and plugin.get("github_file"):
+        fetched = _fetch_plugin_name_from_github(
+            str(plugin["github_dir"]), str(plugin["github_file"])
+        )
+        if fetched:
+            plugin_name = fetched
+            findings.append(Finding("INFO", f"Fetched plugin name from GitHub: {plugin_name}"))
+        else:
+            findings.append(
+                Finding("WARN", f"Could not fetch plugin name from GitHub for '{plugin_alias}'")
+            )
+
+    if not plugin_filename or not plugin_name:
+        findings.append(
+            Finding(
+                "ERROR",
+                f"Could not resolve filename and/or name for plugin '{plugin_alias}'",
+            )
+        )
+        _print_report("ROS2 Gazebo Simulation — Add Plugin", context, findings)
+        return False
+
+    findings.append(
+        Finding(
+            "INFO",
+            f"Plugin: filename='{plugin_filename}', name='{plugin_name}', category='{category}'",
+        )
+    )
+
+    robot_name = args.robot_name
+
+    # Determine robot name from description package
+    if context.description_pkg is not None:
+        pkg_name = find_package_name(context.description_pkg)
+        robot_name = robot_name or robot_name_from_package(pkg_name)
+    elif context.bringup_pkg is not None:
+        bringup_name = find_package_name(context.bringup_pkg)
+        robot_name = robot_name or bringup_name[: -len("_bringup")] if bringup_name.endswith("_bringup") else robot_name
+
+    # Model-level plugins go in the <gazebo> tag of the robot xacro
+    if category == "model":
+        if context.description_pkg is None:
+            findings.append(Finding("ERROR", "No *_description package found; cannot add model plugin"))
+        elif not robot_name:
+            findings.append(Finding("ERROR", "Could not determine robot name; pass --robot-name"))
+        else:
+            gazebo_xacro = context.description_pkg / "urdf" / f"{robot_name}_gazebo.xacro"
+            if not gazebo_xacro.exists():
+                findings.append(
+                    Finding(
+                        "WARN",
+                        f"Gazebo xacro not found at {gazebo_xacro}; creating it with --setup first is recommended",
+                        source=find_package_name(context.description_pkg),
+                    )
+                )
+            else:
+                if _add_model_plugin_to_xacro(
+                    gazebo_xacro, plugin_filename, plugin_name, changed, context.root
+                ):
+                    findings.append(
+                        Finding(
+                            "INFO",
+                            f"Added <gazebo><plugin> block to {robot_name}_gazebo.xacro",
+                            source=_source(
+                                find_package_name(context.description_pkg),
+                                f"urdf/{robot_name}_gazebo.xacro",
+                            ),
+                        )
+                    )
+                else:
+                    findings.append(
+                        Finding(
+                            "INFO",
+                            f"Plugin already present in {robot_name}_gazebo.xacro",
+                        )
+                    )
+
+    # Sensor and world plugins go in the world .sdf
+    if category in ("sensor", "world"):
+        if context.bringup_pkg is None:
+            findings.append(Finding("ERROR", "No *_bringup package found; cannot add world plugin"))
+        else:
+            world_name = args.world_name
+            world_sdf = context.bringup_pkg / "worlds" / f"{world_name}.sdf"
+            if not world_sdf.exists():
+                findings.append(
+                    Finding(
+                        "WARN",
+                        f"World SDF not found at {world_sdf}; creating it with --setup first is recommended",
+                        source=find_package_name(context.bringup_pkg),
+                    )
+                )
+            else:
+                # For sensor rendering plugins (lidar, camera, etc.), skip adding
+                # the Sensors plugin itself to the world — instead we add the
+                # Sensors system block below.
+                skip_world_line = needs_sensors and category == "sensor"
+                if not skip_world_line:
+                    if _add_world_plugin_to_sdf(
+                        world_sdf, plugin_filename, plugin_name, changed, context.root
+                    ):
+                        findings.append(
+                            Finding(
+                                "INFO",
+                                f"Added <plugin> line to {world_name}.sdf",
+                                source=_source(
+                                    find_package_name(context.bringup_pkg),
+                                    f"worlds/{world_name}.sdf",
+                                ),
+                            )
+                        )
+                    else:
+                        findings.append(
+                            Finding("INFO", f"Plugin already present in {world_name}.sdf")
+                        )
+
+                if needs_sensors:
+                    if _ensure_sensors_system_in_world(world_sdf, changed, context.root):
+                        findings.append(
+                            Finding(
+                                "INFO",
+                                f"Added Sensors system plugin (ogre2) to {world_name}.sdf",
+                                source=_source(
+                                    find_package_name(context.bringup_pkg),
+                                    f"worlds/{world_name}.sdf",
+                                ),
+                            )
+                        )
+                    else:
+                        findings.append(
+                            Finding("INFO", f"Sensors system plugin already present in {world_name}.sdf")
+                        )
+
+    findings.extend(Finding("INFO", f"Updated: {path}") for path in changed)
+    if not changed:
+        findings.append(Finding("INFO", "No files were modified"))
+
+    _print_report("ROS2 Gazebo Simulation — Add Plugin", context, findings)
+    return not any(finding.severity == "ERROR" for finding in findings)
+
+
 def setup(args: argparse.Namespace) -> bool:
     context = discover_context(args.path, args.description_package, args.bringup_package)
     findings = [Finding("ERROR", error) for error in context.errors]
@@ -989,11 +1456,24 @@ def _build_parser() -> argparse.ArgumentParser:
         const="setup",
         help="create missing Gazebo simulation scaffold files",
     )
+    modes.add_argument(
+        "--add-plugin",
+        dest="mode",
+        action="store_const",
+        const="add_plugin",
+        help="add a Gazebo system plugin to the robot xacro and/or world SDF",
+    )
     parser.add_argument("path", nargs="?", help="Project root or package path")
     parser.add_argument("--description-package", help="Explicit <name>_description package path")
     parser.add_argument("--bringup-package", help="Explicit <name>_bringup package path")
     parser.add_argument("--robot-name", help="Robot/model name when package discovery is insufficient")
     parser.add_argument("--world-name", default="test_world", help="Gazebo world name for setup")
+    parser.add_argument("--plugin", help="Plugin alias to add (use --list-plugins to see available)")
+    parser.add_argument(
+        "--list-plugins",
+        action="store_true",
+        help="List all available Gazebo Sim plugin aliases",
+    )
     return parser
 
 
@@ -1003,6 +1483,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if diagnose(args) else 1
     if args.mode == "setup":
         return 0 if setup(args) else 1
+    if args.mode == "add_plugin":
+        return 0 if add_plugin(args) else 1
     raise AssertionError(f"unhandled mode: {args.mode}")
 
 
