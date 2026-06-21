@@ -48,6 +48,19 @@ The installer stops before changing anything if the target `ros2` namespace
 already exists. It also refuses to replace an existing `~/.local/bin/ros-devkit`
 unless that command already points at the installer-managed venv.
 
+If `ros-devkit doctor` reports `command not found` after installation, the
+installer-managed command is probably outside your `PATH`. Run it directly:
+
+```bash
+~/.local/bin/ros-devkit doctor
+```
+
+Then add this to your shell profile if needed:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
 For non-interactive installs:
 
 ```bash
@@ -89,16 +102,55 @@ ros-devkit update --force
 
 ### Local development install
 
-From a local checkout:
+Keep the installer-managed command as the stable system command. From a local
+checkout, use the dev runner to execute checkout code and checkout skills
+without copying skills, writing config, or replacing `~/.local/bin/ros-devkit`:
 
 ```bash
-python3 -m pip install .
-mkdir -p ~/.codex/skills/ros2
-cp -r skills/.curated/ros2/. ~/.codex/skills/ros2/
-scripts/configure_ros_devkit.sh --agent codex
+cd ~/ros-devkit
+scripts/dev_ros_devkit.sh doctor
+scripts/dev_ros_devkit.sh description-scaffold --verify
 ```
 
-To configure a custom namespace root directly:
+Do not install the checkout into your user or global Python when you also use
+the installer-managed command; both can create a `ros-devkit` executable in a
+shared bin directory. If you need an editable Python install, put it in a local
+venv and point it at the checkout skills explicitly:
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -e .
+ROS_DEVKIT_SKILL_ROOT="$PWD/skills/.curated/ros2" .venv/bin/ros-devkit doctor
+```
+
+To test installer behavior from the current checkout, including uncommitted and
+untracked local changes, create an isolated sandbox install:
+
+```bash
+scripts/install.sh --local-sandbox .dev-install
+.dev-install/bin/ros-devkit doctor
+```
+
+The sandbox is self-contained. It writes the command, source snapshot, venv,
+skills, and config under `.dev-install/`:
+
+```text
+.dev-install/
+├── bin/ros-devkit
+├── config/ros-devkit/config.env
+├── share/ros-devkit/source
+├── share/ros-devkit/venv
+└── skills/ros2
+```
+
+Re-running the command replaces an existing marked sandbox. If the target
+directory already exists without a `.ros-devkit-local-sandbox` marker, the
+installer stops rather than deleting it. Sandbox installs do not support
+`ros-devkit update`; re-run `scripts/install.sh --local-sandbox .dev-install`
+after changing the checkout.
+
+To configure the stable command to use a custom installed namespace root
+directly:
 
 ```bash
 scripts/configure_ros_devkit.sh --agent custom --namespace-root /path/to/skills/ros2
