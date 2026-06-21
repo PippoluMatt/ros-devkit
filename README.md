@@ -123,6 +123,32 @@ python3 -m venv .venv
 ROS_DEVKIT_SKILL_ROOT="$PWD/skills/.curated/ros2" .venv/bin/ros-devkit doctor
 ```
 
+To test installer behavior from the current checkout, including uncommitted and
+untracked local changes, create an isolated sandbox install:
+
+```bash
+scripts/install.sh --local-sandbox .dev-install
+.dev-install/bin/ros-devkit doctor
+```
+
+The sandbox is self-contained. It writes the command, source snapshot, venv,
+skills, and config under `.dev-install/`:
+
+```text
+.dev-install/
+├── bin/ros-devkit
+├── config/ros-devkit/config.env
+├── share/ros-devkit/source
+├── share/ros-devkit/venv
+└── skills/ros2
+```
+
+Re-running the command replaces an existing marked sandbox. If the target
+directory already exists without a `.ros-devkit-local-sandbox` marker, the
+installer stops rather than deleting it. Sandbox installs do not support
+`ros-devkit update`; re-run `scripts/install.sh --local-sandbox .dev-install`
+after changing the checkout.
+
 To configure the stable command to use a custom installed namespace root
 directly:
 

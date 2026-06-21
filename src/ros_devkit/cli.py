@@ -56,6 +56,14 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _run_update(args: list[str]) -> int:
+    if os.environ.get("ROS_DEVKIT_LOCAL_SANDBOX"):
+        print(
+            "ERROR: update is disabled for local sandbox installs. "
+            "Re-run scripts/install.sh --local-sandbox PATH instead.",
+            file=sys.stderr,
+        )
+        return 1
+
     source_dir = os.environ.get("ROS_DEVKIT_SOURCE")
     if not source_dir:
         candidate_source = Path(__file__).resolve().parents[2]

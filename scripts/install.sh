@@ -6,6 +6,7 @@ ARCHIVE_BASE_URL="${ROS_DEVKIT_ARCHIVE_BASE_URL:-https://github.com/PippoluMatt/
 DEFAULT_REF="main"
 NAMESPACE="ros2"
 MARKER_FILE=".ros-devkit-source"
+LOCAL_SANDBOX_MARKER=".ros-devkit-local-sandbox"
 
 INSTALL_HOME="${ROS_DEVKIT_INSTALL_HOME:-$HOME/.local/share/ros-devkit}"
 SOURCE_DIR="$INSTALL_HOME/source"
@@ -13,25 +14,32 @@ VENV_DIR="$INSTALL_HOME/venv"
 BIN_DIR="${ROS_DEVKIT_BIN_DIR:-$HOME/.local/bin}"
 BIN_PATH="$BIN_DIR/ros-devkit"
 MANAGED_BIN_TARGET="$VENV_DIR/bin/ros-devkit"
+CONFIG_FILE=""
 
 agent=""
 agent_skill_root=""
 agent_skill_root_supplied=0
+agent_supplied=0
 ref="$DEFAULT_REF"
+ref_supplied=0
 interactive=0
+local_sandbox=0
+local_sandbox_root=""
 temp_paths=()
 
 usage() {
   cat <<'EOF'
 usage: scripts/install.sh [--agent codex|claude|pi|custom] [--skill-root PATH] [--ref REF]
+       scripts/install.sh --local-sandbox PATH
 
 Install ros-devkit for an AI agent target.
 
 Options:
-  --agent       Agent target. Interactive installs ask when omitted.
-  --skill-root  Parent agent skill root for --agent custom; installer creates PATH/ros2.
-  --ref         Git branch, tag, or ref to install. Defaults to main.
-  -h, --help    Show this help.
+  --agent          Agent target. Interactive installs ask when omitted.
+  --skill-root     Parent agent skill root for --agent custom; installer creates PATH/ros2.
+  --ref            Git branch, tag, or ref to install. Defaults to main.
+  --local-sandbox  Install a disposable, isolated sandbox from this checkout snapshot.
+  -h, --help       Show this help.
 
 Examples:
   scripts/install.sh
@@ -39,6 +47,7 @@ Examples:
   scripts/install.sh --agent claude
   scripts/install.sh --agent pi
   scripts/install.sh --agent custom --skill-root ~/.config/my-agent/skills
+  scripts/install.sh --local-sandbox .dev-install
 EOF
 }
 
@@ -75,6 +84,32 @@ expand_path() {
   esac
 }
 
+absolute_path() {
+  local path
+  path="$(expand_path "$1")"
+  case "$path" in
+    /*)
+      printf '%s\n' "$path"
+      ;;
+    *)
+      printf '%s\n' "$PWD/$path"
+      ;;
+  esac
+}
+
+checkout_root() {
+  local script_path
+  local script_dir
+
+  script_path="${BASH_SOURCE[0]}"
+  if [[ ! -f "$script_path" ]]; then
+    die "--local-sandbox requires running scripts/install.sh from a local checkout."
+  fi
+
+  script_dir="$(cd "$(dirname "$script_path")" && pwd)"
+  cd "$script_dir/.." && pwd
+}
+
 need_command() {
   if ! command -v "$1" >/dev/null 2>&1; then
     die "Missing required command: $1"
@@ -100,6 +135,7 @@ parse_args() {
       --agent)
         [[ $# -ge 2 ]] || die "--agent requires a value"
         agent="$2"
+        agent_supplied=1
         shift 2
         ;;
       --skill-root)
@@ -111,6 +147,13 @@ parse_args() {
       --ref)
         [[ $# -ge 2 ]] || die "--ref requires a value"
         ref="$2"
+        ref_supplied=1
+        shift 2
+        ;;
+      --local-sandbox)
+        [[ $# -ge 2 ]] || die "--local-sandbox requires a value"
+        local_sandbox=1
+        local_sandbox_root="$2"
         shift 2
         ;;
       -h|--help)
@@ -122,6 +165,39 @@ parse_args() {
         ;;
     esac
   done
+}
+
+configure_local_sandbox() {
+  if [[ "$local_sandbox" -eq 0 ]]; then
+    return
+  fi
+
+  if [[ "$agent_supplied" -eq 1 || "$agent_skill_root_supplied" -eq 1 || "$ref_supplied" -eq 1 ]]; then
+    die "--local-sandbox cannot be combined with --agent, --skill-root, or --ref"
+  fi
+
+  local_sandbox_root="$(absolute_path "$local_sandbox_root")"
+  if [[ "$local_sandbox_root" == "/" ]]; then
+    die "--local-sandbox cannot use / as the sandbox root"
+  fi
+
+  local checkout
+  checkout="$(checkout_root)"
+  if [[ "$local_sandbox_root" == "$checkout" ]]; then
+    die "--local-sandbox cannot use the checkout root"
+  fi
+
+  agent="custom"
+  agent_skill_root="$local_sandbox_root/skills"
+  namespace_root="$agent_skill_root/$NAMESPACE"
+  INSTALL_HOME="$local_sandbox_root/share/ros-devkit"
+  SOURCE_DIR="$INSTALL_HOME/source"
+  VENV_DIR="$INSTALL_HOME/venv"
+  BIN_DIR="$local_sandbox_root/bin"
+  BIN_PATH="$BIN_DIR/ros-devkit"
+  MANAGED_BIN_TARGET="$VENV_DIR/bin/ros-devkit"
+  CONFIG_FILE="$local_sandbox_root/config/ros-devkit/config.env"
+  ref="local-sandbox"
 }
 
 select_agent() {
@@ -267,14 +343,35 @@ preflight_commands() {
   need_command ln
   need_command find
   need_command chmod
-  need_command readlink
   need_command rm
   need_command mv
   need_command mktemp
 
-  if ! command -v git >/dev/null 2>&1; then
-    need_command curl
-    need_command tar
+  if [[ "$local_sandbox" -eq 0 ]]; then
+    need_command readlink
+    if ! command -v git >/dev/null 2>&1; then
+      need_command curl
+      need_command tar
+    fi
+  fi
+}
+
+preflight_sandbox_paths() {
+  if [[ -L "$local_sandbox_root" ]]; then
+    die "Local sandbox root cannot be a symlink: $local_sandbox_root"
+  fi
+
+  if [[ -e "$local_sandbox_root" ]]; then
+    if [[ ! -d "$local_sandbox_root" ]]; then
+      die "Local sandbox root exists but is not a directory: $local_sandbox_root"
+    fi
+
+    if [[ ! -f "$local_sandbox_root/$LOCAL_SANDBOX_MARKER" ]]; then
+      die "Local sandbox root already exists without $LOCAL_SANDBOX_MARKER: $local_sandbox_root"
+    fi
+
+    log "Removing existing local sandbox: $local_sandbox_root"
+    rm -rf "$local_sandbox_root"
   fi
 }
 
@@ -293,6 +390,21 @@ preflight_python() {
 }
 
 print_plan() {
+  if [[ "$local_sandbox" -eq 1 ]]; then
+    cat <<EOF
+Install ros-devkit local sandbox
+  Sandbox root     : $local_sandbox_root
+  Agent target     : $agent
+  Agent skill root : $agent_skill_root
+  Namespace root   : $namespace_root
+  Source snapshot  : $SOURCE_DIR
+  CLI venv         : $VENV_DIR
+  CLI command      : $BIN_PATH
+  Config file      : $CONFIG_FILE
+EOF
+    return
+  fi
+
   cat <<EOF
 Install ros-devkit
   Agent target     : $agent
@@ -391,6 +503,44 @@ acquire_source() {
   fi
 }
 
+acquire_source_from_checkout() {
+  local checkout
+  local tmp_source
+
+  checkout="$(checkout_root)"
+  if [[ ! -d "$checkout/skills/.curated/$NAMESPACE" ]]; then
+    die "Local checkout is missing skills/.curated/$NAMESPACE: $checkout"
+  fi
+
+  if [[ ! -f "$checkout/pyproject.toml" ]]; then
+    die "Local checkout is missing pyproject.toml: $checkout"
+  fi
+
+  tmp_source="$(mktemp -d "${TMPDIR:-/tmp}/ros-devkit-source.XXXXXX")"
+  temp_paths+=("$tmp_source")
+
+  log "Copying local checkout snapshot..."
+  cp -R "$checkout/." "$tmp_source/"
+  rm -rf \
+    "$tmp_source/.git" \
+    "$tmp_source/.venv" \
+    "$tmp_source/.pytest_cache" \
+    "$tmp_source/build" \
+    "$tmp_source/install" \
+    "$tmp_source/log"
+  find "$tmp_source" -type d -name '__pycache__' -prune -exec rm -rf {} +
+  find "$tmp_source" -type f -name '*.pyc' -delete
+
+  printf 'repo=local-sandbox\nsource=%s\n' "$checkout" > "$tmp_source/$MARKER_FILE"
+
+  mkdir -p "$INSTALL_HOME"
+  printf 'source=%s\n' "$checkout" > "$local_sandbox_root/$LOCAL_SANDBOX_MARKER"
+  if [[ -e "$SOURCE_DIR" ]]; then
+    rm -rf "$SOURCE_DIR"
+  fi
+  mv "$tmp_source" "$SOURCE_DIR"
+}
+
 install_cli() {
   log "Installing ros-devkit CLI..."
   python3 -m venv "$VENV_DIR"
@@ -400,7 +550,13 @@ install_cli() {
     echo 'set -euo pipefail'
     printf 'ROS_DEVKIT_SOURCE=%q\n' "$SOURCE_DIR"
     printf 'ROS_DEVKIT_PYTHON=%q\n' "$VENV_DIR/bin/python"
-    echo 'export ROS_DEVKIT_SOURCE ROS_DEVKIT_PYTHON'
+    if [[ "$local_sandbox" -eq 1 ]]; then
+      printf 'ROS_DEVKIT_CONFIG=%q\n' "$CONFIG_FILE"
+      printf 'ROS_DEVKIT_LOCAL_SANDBOX=%q\n' "$local_sandbox_root"
+      echo 'export ROS_DEVKIT_SOURCE ROS_DEVKIT_PYTHON ROS_DEVKIT_CONFIG ROS_DEVKIT_LOCAL_SANDBOX'
+    else
+      echo 'export ROS_DEVKIT_SOURCE ROS_DEVKIT_PYTHON'
+    fi
     echo 'PYTHONPATH="$ROS_DEVKIT_SOURCE/src${PYTHONPATH:+:$PYTHONPATH}"'
     echo 'export PYTHONPATH'
     echo 'exec "$ROS_DEVKIT_PYTHON" -m ros_devkit.cli "$@"'
@@ -433,7 +589,11 @@ install_skills() {
 
 configure_cli() {
   log "Configuring ros-devkit..."
-  "$SOURCE_DIR/scripts/configure_ros_devkit.sh" --agent "$agent" --namespace-root "$namespace_root"
+  if [[ "$local_sandbox" -eq 1 ]]; then
+    XDG_CONFIG_HOME="$local_sandbox_root/config" "$SOURCE_DIR/scripts/configure_ros_devkit.sh" --agent "$agent" --namespace-root "$namespace_root"
+  else
+    "$SOURCE_DIR/scripts/configure_ros_devkit.sh" --agent "$agent" --namespace-root "$namespace_root"
+  fi
 }
 
 run_doctor() {
@@ -442,6 +602,14 @@ run_doctor() {
 }
 
 warn_path() {
+  if [[ "$local_sandbox" -eq 1 ]]; then
+    printf 'Run the sandbox command directly with:\n'
+    printf '  %s doctor\n' "$BIN_PATH"
+    printf 'Or put it first on PATH for this shell:\n'
+    printf '  export PATH="%s:$PATH"\n' "$BIN_DIR"
+    return
+  fi
+
   case ":$PATH:" in
     *":$BIN_DIR:"*)
       ;;
@@ -457,13 +625,25 @@ warn_path() {
 
 main() {
   parse_args "$@"
-  select_agent
-  resolve_skill_root
+  configure_local_sandbox
+  if [[ "$local_sandbox" -eq 0 ]]; then
+    select_agent
+    resolve_skill_root
+  fi
   preflight_commands
-  preflight_paths
+  if [[ "$local_sandbox" -eq 1 ]]; then
+    preflight_sandbox_paths
+  else
+    preflight_paths
+  fi
   preflight_python
   confirm_interactive
-  acquire_source
+  if [[ "$local_sandbox" -eq 1 ]]; then
+    print_plan
+    acquire_source_from_checkout
+  else
+    acquire_source
+  fi
   install_cli
   install_skills
   configure_cli
