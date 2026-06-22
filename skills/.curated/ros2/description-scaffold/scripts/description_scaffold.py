@@ -25,6 +25,8 @@ from validate import (  # noqa: E402
     validate,
 )
 
+from utils.xml import local_name as _local_name  # noqa: E402
+
 
 XACRO_NS = "http://www.ros.org/wiki/xacro"
 ET.register_namespace("xacro", XACRO_NS)
@@ -184,12 +186,6 @@ def _create(target: str, args: argparse.Namespace) -> int:
         license_type=args.license,
     )
     return 0
-
-
-def _local_name(tag: str) -> str:
-    if "}" in tag:
-        return tag.rsplit("}", 1)[1]
-    return tag
 
 
 def _looks_include_only(path: Path) -> bool:

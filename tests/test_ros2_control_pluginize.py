@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 from pathlib import Path
 import subprocess
 import sys
@@ -14,10 +15,11 @@ SCRIPT = (
     / "skills"
     / ".curated"
     / "ros2"
-    / "ros2-control-pluginize"
     / "scripts"
-    / "ros2_control_pluginize.py"
+    / "ros2_control_pluginize_lib"
+    / "__main__.py"
 )
+SHARED_SCRIPTS = REPO_ROOT / "skills" / ".curated" / "ros2" / "scripts"
 
 
 class Ros2ControlPluginizeCheckTest(unittest.TestCase):
@@ -33,6 +35,43 @@ class Ros2ControlPluginizeCheckTest(unittest.TestCase):
 
         self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
         self.assertIn("ros2-control-pluginize: OK", completed.stdout)
+
+    def test_entrypoint_delegates_to_importable_internal_modules(self) -> None:
+        completed = subprocess.run(
+            [sys.executable, str(SCRIPT), "--help"],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+
+        self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
+
+        scripts_dir = str(SHARED_SCRIPTS)
+        inserted = scripts_dir not in sys.path
+        if inserted:
+            sys.path.insert(0, scripts_dir)
+        try:
+            for module_name in (
+                "check",
+                "cmake",
+                "cpp_source",
+                "models",
+                "package_xml",
+                "plugin_xml",
+                "pluginize",
+                "reporting",
+                "validation",
+            ):
+                importlib.import_module(f"ros2_control_pluginize_lib.{module_name}")
+        finally:
+            if inserted:
+                sys.path.remove(scripts_dir)
+
+        entrypoint = SCRIPT.read_text(encoding="utf-8")
+        self.assertTrue((SHARED_SCRIPTS / "ros2_control_pluginize_lib").is_dir())
+        self.assertEqual(SCRIPT.parent, SHARED_SCRIPTS / "ros2_control_pluginize_lib")
+        self.assertIn("from ros2_control_pluginize_lib.cli import main", entrypoint)
 
     def test_valid_hardware_package_exits_zero(self) -> None:
         with tempfile.TemporaryDirectory() as root:

@@ -30,6 +30,22 @@ _Avoid_: Agent type, agent kind
 A reusable script stored at a namespace level for use by multiple curated skills in that namespace.
 _Avoid_: Global script, common script
 
+**Shared library package**:
+A Python package under `scripts/` that holds cross-cutting modules imported by multiple curated skills. Distinguished from a skill-local package like `ros2_control_pluginize_lib/`, which is owned by one skill.
+_Avoid_: Shared module folder, common lib
+
+**Shared module**:
+A single Python file inside a shared library package (e.g., `utils/diagnostics.py`). The unit of reuse — one concern per file.
+_Avoid_: Shared file, utility script
+
+**Finding**:
+A diagnostic observation produced by a check or pluginize run, carrying a severity level (`ERROR`, `WARN`, `INFO`, `OK`), a human-readable message, and an optional source reference.
+_Avoid_: Diagnostic, result, issue
+
+**Diagnostic source**:
+A string identifying where a finding originates, formatted as `package:rel_path` (e.g., `my_hardware:CMakeLists.txt`). Used in finding output so the user can trace a problem back to a file.
+_Avoid_: Source ref, location tag
+
 **Skill-local script**:
 A script owned by one curated skill because its behavior is specific to that skill.
 _Avoid_: Private script, per-skill script

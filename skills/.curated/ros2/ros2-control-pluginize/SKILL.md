@@ -16,6 +16,8 @@ ros-devkit ros2-control-pluginize --check <package_dir>
 ros-devkit ros2-control-pluginize --pluginize <package_dir>
 ```
 
+Implementation note: the CLI entry point is `../scripts/ros2_control_pluginize_lib/__main__.py` (``python -m ros2_control_pluginize_lib``); behavior lives under the shared `../scripts/ros2_control_pluginize_lib/` package by concern.
+
 Modes are workflow selectors:
 
 - `--check <package_dir>`: inspect one existing `_hardware` or `_controllers` package and report `ERROR`, `WARN`, and `INFO` findings. It never edits files. Exit non-zero only when `ERROR` findings exist.

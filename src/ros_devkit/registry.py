@@ -22,6 +22,6 @@ COMMANDS: dict[str, SkillCommand] = {
     ),
     "ros2-control-pluginize": SkillCommand(
         name="ros2-control-pluginize",
-        script_path="ros2-control-pluginize/scripts/ros2_control_pluginize.py",
+        script_path="scripts/ros2_control_pluginize_lib/__main__.py",
     ),
 }

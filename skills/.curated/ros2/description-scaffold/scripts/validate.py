@@ -16,8 +16,8 @@ from pathlib import Path
 SHARED_SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
 sys.path.insert(0, str(SHARED_SCRIPTS))
 
-from cmake import remove_default_lint_block  # noqa: E402
-from diagnostics import Finding, format_severity, print_finding  # noqa: E402
+from cmake_lib.transforms import remove_default_lint_block  # noqa: E402
+from utils.diagnostics import Finding, format_severity, print_finding  # noqa: E402
 
 RESOURCE_INSTALL_DIRS = ("urdf", "meshes", "rviz", "config", "launch")
 DISCOVERY_SKIP_DIRS = {".git", "build", "install", "log"}

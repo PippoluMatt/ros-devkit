@@ -35,7 +35,7 @@ class UpdateCommandTest(unittest.TestCase):
 
             self.assertNotEqual(0, completed.returncode)
             self.assertIn("Local changes detected", completed.stderr)
-            self.assertEqual("0.1.0", install.installed_version())
+            self.assertEqual("0.1.1", install.installed_version())
             self.assertIn("local edit", skill_file.read_text(encoding="utf-8"))
             self.assertFalse((install.namespace_root / "description-scaffold" / "UPDATED.txt").exists())
 
@@ -62,7 +62,7 @@ class UpdateCommandTest(unittest.TestCase):
 
             self.assertEqual(0, completed.returncode)
             self.assertIn("Dry run: no changes made.", completed.stdout)
-            self.assertEqual("0.1.0", install.installed_version())
+            self.assertEqual("0.1.1", install.installed_version())
             self.assertEqual(wrapper_before, install.managed_bin_target.read_text(encoding="utf-8"))
             self.assertFalse((install.namespace_root / "description-scaffold" / "UPDATED.txt").exists())
 
@@ -86,7 +86,7 @@ class UpdateCommandTest(unittest.TestCase):
 
             self.assertNotEqual(0, completed.returncode)
             self.assertIn("not managed by this installer", completed.stderr)
-            self.assertEqual("0.1.0", install.installed_version())
+            self.assertEqual("0.1.1", install.installed_version())
             self.assertFalse((install.namespace_root / "description-scaffold" / "UPDATED.txt").exists())
 
 
