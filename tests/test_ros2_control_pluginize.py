@@ -65,6 +65,144 @@ class Ros2ControlPluginizeCheckTest(unittest.TestCase):
             self.assertIn("INFO: [demo_controllers:demo_controllers.xml]", completed.stdout)
             self.assertIn("INFO: No errors found", completed.stdout)
 
+    def test_pluginize_repairs_missing_hardware_wiring(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            pkg = Path(root) / "demo_hardware"
+            self._write_hardware_package(
+                pkg,
+                include_xml=False,
+                include_export=False,
+                include_package_dependencies=False,
+                include_cmake_plugin_export=False,
+                include_pluginlib_header=False,
+            )
+
+            completed = self._run_pluginize(pkg)
+
+            self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
+            self.assertIn("ROS2 Control Pluginize", completed.stdout)
+            self.assertIn("Created: demo_hardware.xml", completed.stdout)
+            self.assertIn("Updated: src/plugin.cpp", completed.stdout)
+            self.assertIn("Updated: package.xml", completed.stdout)
+            self.assertIn("Updated: CMakeLists.txt", completed.stdout)
+            self.assertIn("INFO: No errors found", completed.stdout)
+
+            self.assertIn("<depend>hardware_interface</depend>", (pkg / "package.xml").read_text(encoding="utf-8"))
+            self.assertIn("<depend>pluginlib</depend>", (pkg / "package.xml").read_text(encoding="utf-8"))
+            self.assertIn(
+                'base_class_type="hardware_interface::SystemInterface"',
+                (pkg / "demo_hardware.xml").read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                '#include "pluginlib/class_list_macros.hpp"',
+                (pkg / "src" / "plugin.cpp").read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                "PLUGINLIB_EXPORT_CLASS(",
+                (pkg / "src" / "plugin.cpp").read_text(encoding="utf-8"),
+            )
+
+    def test_pluginize_is_idempotent_after_repair(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            pkg = Path(root) / "demo_hardware"
+            self._write_hardware_package(
+                pkg,
+                include_xml=False,
+                include_export=False,
+                include_package_dependencies=False,
+                include_cmake_plugin_export=False,
+                include_pluginlib_header=False,
+            )
+
+            first = self._run_pluginize(pkg)
+            second = self._run_pluginize(pkg)
+
+            self.assertEqual(0, first.returncode, first.stdout + first.stderr)
+            self.assertEqual(0, second.returncode, second.stdout + second.stderr)
+            self.assertIn("INFO: No files were modified", second.stdout)
+            self.assertEqual(
+                1,
+                (pkg / "src" / "plugin.cpp").read_text(encoding="utf-8").count("PLUGINLIB_EXPORT_CLASS("),
+            )
+            self.assertEqual(
+                1,
+                (pkg / "CMakeLists.txt")
+                .read_text(encoding="utf-8")
+                .count("pluginlib_export_plugin_description_file"),
+            )
+
+    def test_pluginize_repairs_missing_controller_wiring(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            pkg = Path(root) / "demo_controllers"
+            self._write_package(
+                pkg=pkg,
+                package_name="demo_controllers",
+                library_target="demo_controllers",
+                interface_package="controller_interface",
+                class_name="DemoController",
+                namespace="demo_controllers",
+                base="controller_interface::ChainableControllerInterface",
+                include_xml=False,
+                include_export=False,
+                include_package_dependencies=False,
+                include_cmake_plugin_export=False,
+                include_pluginlib_header=False,
+                export_inside_namespace=False,
+                export_base="controller_interface::ChainableControllerInterface",
+                extra_candidate=False,
+                cmake_dependency_style="target",
+            )
+
+            completed = self._run_pluginize(pkg)
+
+            self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
+            self.assertIn("Branch     : controllers", completed.stdout)
+            self.assertIn("INFO: No errors found", completed.stdout)
+            self.assertIn(
+                'base_class_type="controller_interface::ChainableControllerInterface"',
+                (pkg / "demo_controllers.xml").read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                "pluginlib_export_plugin_description_file",
+                (pkg / "CMakeLists.txt").read_text(encoding="utf-8"),
+            )
+
+    def test_pluginize_prefers_single_cmake_target_over_stale_xml_target(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            pkg = Path(root) / "demo_hardware"
+            self._write_hardware_package(pkg)
+            xml_path = pkg / "demo_hardware.xml"
+            xml_path.write_text(
+                xml_path.read_text(encoding="utf-8").replace(
+                    'path="demo_hardware_interface"',
+                    'path="stale_target"',
+                ),
+                encoding="utf-8",
+            )
+
+            completed = self._run_pluginize(pkg)
+
+            self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
+            self.assertIn('path="demo_hardware_interface"', xml_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                1,
+                (pkg / "CMakeLists.txt").read_text(encoding="utf-8").count("add_library("),
+            )
+
+    def test_pluginize_moves_export_macro_outside_namespace(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            pkg = Path(root) / "demo_hardware"
+            self._write_hardware_package(pkg, export_inside_namespace=True)
+
+            completed = self._run_pluginize(pkg)
+
+            self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
+            self.assertIn("INFO: No errors found", completed.stdout)
+            self.assertEqual(
+                1,
+                (pkg / "src" / "plugin.cpp").read_text(encoding="utf-8").count("PLUGINLIB_EXPORT_CLASS("),
+            )
+
     def test_non_chainable_controller_warns_but_exits_zero(self) -> None:
         with tempfile.TemporaryDirectory() as root:
             pkg = Path(root) / "demo_controllers"
@@ -178,6 +316,15 @@ class Ros2ControlPluginizeCheckTest(unittest.TestCase):
     def _run_check(self, pkg: Path) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [sys.executable, str(SCRIPT), "--check", str(pkg)],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+
+    def _run_pluginize(self, pkg: Path) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [sys.executable, str(SCRIPT), "--pluginize", str(pkg)],
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,

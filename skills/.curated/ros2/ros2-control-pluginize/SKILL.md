@@ -5,171 +5,49 @@ description: Pluginize existing ROS2 ros2_control controller and hardware interf
 
 # ROS2 Control Pluginize
 
-Use this skill to convert an existing ros2_control controller or hardware interface implementation into a loadable pluginlib plugin. Keep the conversion surgical: do not rename the package, move the class, or rewrite build structure unless plugin loading requires it.
+Convert an existing ros2_control controller or hardware interface package into a loadable pluginlib plugin, or diagnose existing pluginlib wiring.
 
-## Workflow
+## CLI
 
-1. Classify the package from `package.xml` or the package directory name:
-   - `_controllers` means the controller branch.
-   - `_hardware` means the hardware branch.
-   - Any other suffix is outside this skill; ask before proceeding.
+Prefer the `ros-devkit ros2-control-pluginize` CLI. It dispatches to the installed skill implementation; run `ros-devkit doctor` if the command or configured skill root is missing. Use scripts directly only when developing or debugging the CLI dispatch.
 
-   Complete this step when the branch, package name, C++ namespace, class name, source `.cpp`, library target, and plugin XML path are identified.
-
-2. Add or update the plugin description XML at the package root.
-
-   Complete this step when `<library path="...">` matches the CMake library target exactly and the `<class>` entry uses the same namespace, class, and base type as the source export macro.
-
-3. Add the source export at the end of the implementation `.cpp`.
-
-   Complete this step when `#include "pluginlib/class_list_macros.hpp"` and exactly one `PLUGINLIB_EXPORT_CLASS(...)` for the class exist outside the implementation namespace.
-
-4. Add missing `package.xml` dependencies without duplicating existing tags.
-
-   Complete this step when the branch-specific interface dependency and `pluginlib` are present.
-
-5. Wire `CMakeLists.txt`.
-
-   Complete this step when the interface package and `pluginlib` are found, the plugin library links them, `pluginlib_export_plugin_description_file(...)` points at the XML, the library target is installed, and exported dependencies still match the package dependencies.
-
-6. Validate the conversion.
-
-   Complete this step when XML parses, source/build names agree, `git diff --check` passes, and `colcon build --packages-select <package>` has been run when a ROS2 environment is available.
-
-## Controller Branch
-
-Use this branch only for packages ending `_controllers`.
-
-Plugin XML:
-
-```xml
-<library path="<library_target>">
-  <class name="<library_target>/<ClassName>"
-         type="<namespace>::<ClassName>"
-         base_class_type="controller_interface::ChainableControllerInterface">
-    <description><ClassName> ros2_control controller.</description>
-  </class>
-</library>
+```bash
+ros-devkit ros2-control-pluginize --check <package_dir>
+ros-devkit ros2-control-pluginize --pluginize <package_dir>
 ```
 
-Source export:
+Modes are workflow selectors:
 
-```cpp
-#include "pluginlib/class_list_macros.hpp"
+- `--check <package_dir>`: inspect one existing `_hardware` or `_controllers` package and report `ERROR`, `WARN`, and `INFO` findings. It never edits files. Exit non-zero only when `ERROR` findings exist.
+- `--pluginize <package_dir>`: add missing pluginlib XML, `PLUGINLIB_EXPORT_CLASS`, `package.xml` dependencies, and `CMakeLists.txt` wiring, then run `--check`. It refuses ambiguous packages instead of guessing when multiple plugin classes, multiple plugin XML files, or multiple CMake library targets exist.
 
-PLUGINLIB_EXPORT_CLASS(
-  <namespace>::<ClassName>,
-  controller_interface::ChainableControllerInterface)
-```
+## Pluginize Workflow
 
-`package.xml` dependencies:
+Use `--pluginize` when the user asks to convert, fix, add, or repair ros2_control pluginlib wiring.
 
-```xml
-<depend>controller_interface</depend>
-<depend>pluginlib</depend>
-```
+1. Run `ros-devkit ros2-control-pluginize --pluginize <package_dir>`.
+2. Inspect the changed files. Keep the conversion surgical: do not rename the package, move the class, or rewrite unrelated build structure.
+3. If the command reports ambiguity, inspect the listed candidates and ask the user which class or target is intended.
+4. Run `git diff --check`.
+5. Run `colcon build --packages-select <package_name>` when a ROS2 environment is available.
 
-If the existing controller inherits `controller_interface::ControllerInterface` instead of `controller_interface::ChainableControllerInterface`, do not silently change the inheritance. Ask whether to export the existing base or convert the controller to chainable.
+Completion criterion: `--pluginize` finishes successfully, its follow-up `--check` has no `ERROR` findings, and available workspace validation passes.
 
-## Hardware Branch
+## Check Workflow
 
-Use this branch only for packages ending `_hardware`.
+Use `--check` for requests to inspect, diagnose, validate, or review an existing pluginized package.
 
-Prefer `<name>_hardware_interface` as the library target when no target exists yet, where `<name>` is the package name without the `_hardware` suffix.
+1. Run `ros-devkit ros2-control-pluginize --check <package_dir>`.
+2. Treat `ERROR` findings as blockers, `WARN` findings as design or readiness concerns, and `INFO` findings as package facts.
+3. Do not edit files from check output unless the user explicitly asks for fixes.
 
-Plugin XML:
+## Branch Rules
 
-```xml
-<?xml version='1.0' encoding='utf-8'?>
-<library path="<name>_hardware_interface">
-  <class name="<name>_hardware/<ClassName>"
-         type="<name>_hardware::<ClassName>"
-         base_class_type="hardware_interface::SystemInterface">
-    <description><ClassName> ros2_control hardware interface.</description>
-  </class>
-</library>
-```
-
-Source export:
-
-```cpp
-#include "pluginlib/class_list_macros.hpp"
-
-PLUGINLIB_EXPORT_CLASS(
-  <name>_hardware::<ClassName>,
-  hardware_interface::SystemInterface)
-```
-
-`package.xml` dependencies:
-
-```xml
-<depend>hardware_interface</depend>
-<depend>pluginlib</depend>
-```
-
-## CMake Wiring
-
-Preserve the package's existing CMake style. If it uses `THIS_PACKAGE_INCLUDE_DEPENDS`, add the branch-specific dependency and `pluginlib` there so the existing `foreach(Dependency IN ITEMS ...) find_package(...) endforeach()` remains the single dependency source. Otherwise add explicit `find_package(<dependency> REQUIRED)` calls.
-
-For controller plugins, add:
-
-```cmake
-pluginlib_export_plugin_description_file(
-  controller_interface <plugin_xml>)
-```
-
-For hardware plugins, add:
-
-```cmake
-pluginlib_export_plugin_description_file(
-  hardware_interface <plugin_xml>)
-```
-
-Ensure the plugin library target links the matching imported targets:
-
-```cmake
-target_link_libraries(<library_target> PUBLIC
-  controller_interface::controller_interface
-  pluginlib::pluginlib
-)
-```
-
-or:
-
-```cmake
-target_link_libraries(<library_target> PUBLIC
-  hardware_interface::hardware_interface
-  pluginlib::pluginlib
-)
-```
-
-If the package already uses `ament_target_dependencies(...)`, add the same dependencies there instead of mixing target-link styles without need.
-
-The plugin library must be installed and exported:
-
-```cmake
-install(
-  TARGETS <library_target>
-  EXPORT export_<library_target>
-  RUNTIME DESTINATION bin
-  ARCHIVE DESTINATION lib
-  LIBRARY DESTINATION lib
-)
-
-ament_export_targets(export_<library_target> HAS_LIBRARY_TARGET)
-ament_export_dependencies(<dependencies>)
-```
-
-Use `${THIS_PACKAGE_INCLUDE_DEPENDS}` for `<dependencies>` only when that variable already exists; otherwise list the branch-specific interface package, `pluginlib`, and any other public dependencies explicitly.
-
-If the package has an existing `install(TARGETS ...)` or `ament_export_targets(...)` block, update it in place rather than adding a duplicate.
-
-## Checks
-
-- The package suffix selects exactly one branch.
-- Plugin XML `<library path>` equals the CMake library target.
-- Plugin XML `type` equals the `PLUGINLIB_EXPORT_CLASS` C++ class.
-- Plugin XML `base_class_type` equals the `PLUGINLIB_EXPORT_CLASS` base class.
-- `pluginlib_export_plugin_description_file(...)` uses `controller_interface` for controllers and `hardware_interface` for hardware.
-- The export macro is outside the namespace block and appears once.
-- `package.xml` and `CMakeLists.txt` both include the branch-specific interface dependency and `pluginlib`.
+- `_hardware` packages export `hardware_interface::SystemInterface` and depend on `hardware_interface` plus `pluginlib`.
+- `_controllers` packages export `controller_interface::ChainableControllerInterface` or the existing `controller_interface::ControllerInterface` base and depend on `controller_interface` plus `pluginlib`.
+- Do not silently convert a non-chainable controller to chainable. Export the existing base unless the user asks for an inheritance change.
+- The source export macro must be outside the implementation namespace and appear exactly once for the plugin class.
+- Plugin XML `<library path>` must equal the CMake library target.
+- Plugin XML `type` and `base_class_type` must match the `PLUGINLIB_EXPORT_CLASS(...)` arguments.
+- `pluginlib_export_plugin_description_file(...)` must use `hardware_interface` for hardware packages and `controller_interface` for controller packages.
+- Preserve the package's existing CMake dependency style. Use `THIS_PACKAGE_INCLUDE_DEPENDS` or `ament_target_dependencies(...)` when the package already does.
