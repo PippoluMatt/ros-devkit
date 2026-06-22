@@ -54,6 +54,16 @@ Recent commits are short, descriptive summaries of the changed area rather than 
 
 Always use the git worktree workflow for this repo. Start each new task from a separate worktree and task branch, keep the primary checkout clean, and avoid mixing unrelated changes in one worktree. If you inherit an existing dirty checkout, preserve the user’s changes and continue only when the requested edit clearly belongs to that same in-progress work.
 
+```bash
+git worktree add ../project-bugfix -b fix-X
+cd ../project-bugfix
+git add .
+git commit -m "Critic Bug Resolved"
+git push origin fix-X
+cd ../project-main
+git worktree remove ../project-bugfix
+```
+
 When editing skills, touch only the relevant skill unless a shared namespace concern requires more. Prefer existing scripts over manual rewrites, and do not add new generators unless deterministic output is necessary.
 
 When editing the CLI dispatcher, avoid moving ROS2-specific behavior into `src/ros_devkit/`; dispatch to skill-owned scripts instead. When editing installer or updater behavior, preserve safeguards for unmanaged commands, local edits in installed skills, and marked local sandboxes.
