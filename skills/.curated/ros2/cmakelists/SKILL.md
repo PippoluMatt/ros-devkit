@@ -15,6 +15,6 @@ These skill-local scripts are compatibility wrappers around the namespace-level 
 
 Prefer running the scripts over rewriting these transformations manually. After script use, inspect the diff and make only task-specific adjustments.
 
-When CMake wiring is for a `ros2_control` `hardware_interface::SystemInterface` plugin library, load the `ros2-control` skill and use its `scripts/add_ros2_control_cmake.py` script instead of duplicating the pluginlib/export recipe here. That skill also owns `package.xml` dependency and export wiring when the task needs the complete ros2_control package setup.
+When CMake wiring is for a new `ros2_control` `hardware_interface::SystemInterface` hardware package, load the `ros2-control` skill and use its `scripts/add_ros2_control_cmake.py` script instead of duplicating generated package wiring here. When an existing `_controllers` or `_hardware` package needs pluginlib conversion, load `ros2-control-pluginize` instead.
 
 Load the `ros2-cpp-node` shared node module when build rules are for node executables, components, lifecycle-compatible helpers, or packages whose dependencies are determined by node interfaces. Keep build-file generation in this skill and node behavior decisions in the shared node module.

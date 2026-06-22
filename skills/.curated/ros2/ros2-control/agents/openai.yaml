@@ -1,4 +1,4 @@
 interface:
   display_name: "ROS2 Control"
-  short_description: "Create ROS2 control plugins and xacro"
-  default_prompt: "Use $ros2-control to create a ROS2 SystemInterface plugin package and wire its ros2_control xacro scaffold."
+  short_description: "Scaffold SystemInterface hardware"
+  default_prompt: "Use $ros2-control to scaffold a new ROS2 SystemInterface hardware package and wire its ros2_control xacro scaffold."

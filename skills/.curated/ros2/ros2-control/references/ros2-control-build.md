@@ -1,6 +1,6 @@
 # ROS2 Control Build Wiring
 
-Use `ament_cmake` and pluginlib export wiring for SystemInterface plugin libraries.
+Use this reference only for generated build wiring in a new `hardware_interface::SystemInterface` hardware package. Use `ros2-control-pluginize` for existing `_controllers` or `_hardware` packages.
 
 ## CMakeLists.txt
 

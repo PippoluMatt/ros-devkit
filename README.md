@@ -224,7 +224,8 @@ installs should be updated by pulling the checkout and reinstalling locally.
 | | [`ros2-sensor`](skills/.curated/ros2/ros2-sensor/SKILL.md) | Create and review ROS2 sensor interfaces |
 | **Robot Description & Control** | [`description-scaffold`](skills/.curated/ros2/description-scaffold/SKILL.md) | Scaffold and validate ROS2 URDF/xacro description packages |
 | | [`gazebo-simulation`](skills/.curated/ros2/gazebo-simulation/SKILL.md) | Set up and diagnose ROS2 Gazebo simulation wiring |
-| | [`ros2-control`](skills/.curated/ros2/ros2-control/SKILL.md) | Create ROS2 control plugins and xacro |
+| | [`ros2-control`](skills/.curated/ros2/ros2-control/SKILL.md) | Scaffold SystemInterface hardware packages and xacro |
+| | [`ros2-control-pluginize`](skills/.curated/ros2/ros2-control-pluginize/SKILL.md) | Convert ROS2 control packages to pluginlib plugins |
 | **MCU & Embedded** | [`mcu-freertos`](skills/.curated/ros2/mcu-freertos/SKILL.md) | Build and maintain MCU RTOS firmware |
 | | [`mcu-protocol`](skills/.curated/ros2/mcu-protocol/SKILL.md) | Design MCU wire protocols for ROS2 |
 | **Project & Deployment** | [`robot-profile`](skills/.curated/ros2/robot-profile/SKILL.md) | Capture ROS2 robot hardware context |
@@ -240,7 +241,7 @@ depend on node interfaces.
 ```
 ros-devkit/
 ├── src/ros_devkit/          # CLI dispatcher package
-├── skills/.curated/ros2/    # Curated skill collection (11 skills)
+├── skills/.curated/ros2/    # Curated skill collection (12 skills)
 │   ├── cmakelists/
 │   ├── cpp-node/
 │   ├── description-scaffold/
@@ -250,6 +251,7 @@ ros-devkit/
 │   ├── mcu-protocol/
 │   ├── robot-profile/
 │   ├── ros2-control/
+│   ├── ros2-control-pluginize/
 │   ├── ros2-dockerfile/
 │   └── ros2-sensor/
 ├── scripts/                 # Setup & configuration scripts
