@@ -460,8 +460,115 @@ def _diagnose_bringup(pkg_dir: Path, findings: list[Finding]) -> None:
                     )
                 )
 
+    _diagnose_world_sdf(pkg_dir, findings)
     _diagnose_bridge(pkg_dir, findings)
     _diagnose_launch(pkg_dir, findings)
+
+
+def _resolve_gz_sim_plugin_dir() -> Path | None:
+    """Return the directory containing gz-sim plugin .so files, if found."""
+    candidates = [
+        Path("/opt/ros/jazzy/opt/gz_sim_vendor/lib/gz-sim-8/plugins"),
+        Path("/usr/lib/gz-sim-8/plugins"),
+        Path("/usr/local/lib/gz-sim-8/plugins"),
+    ]
+    # Also check GZ_SIM_SYSTEM_PLUGIN_PATH
+    env_path = os.environ.get("GZ_SIM_SYSTEM_PLUGIN_PATH", "")
+    if env_path:
+        candidates.insert(0, Path(env_path))
+    for candidate in candidates:
+        if candidate.is_dir():
+            return candidate
+    return None
+
+
+def _diagnose_world_sdf(pkg_dir: Path, findings: list[Finding]) -> None:
+    """Validate <plugin filename="..."> in world .sdf files against installed .so libs."""
+    pkg_name = find_package_name(pkg_dir)
+    worlds_dir = pkg_dir / "worlds"
+    if not worlds_dir.is_dir():
+        return
+
+    sdf_files = sorted(worlds_dir.glob("*.sdf"))
+    if not sdf_files:
+        return
+
+    plugin_dir = _resolve_gz_sim_plugin_dir()
+    if plugin_dir is None:
+        findings.append(
+            Finding(
+                "WARN",
+                "Could not locate gz-sim plugin directory; skipping SDF plugin filename validation",
+                source=pkg_name,
+            ),
+        )
+        return
+
+    # Build a set of installed plugin basenames (e.g. "gz-sim-sensors-system")
+    installed_plugins: set[str] = set()
+    for so_file in plugin_dir.iterdir():
+        if so_file.suffix == ".so":
+            name = so_file.name
+            # Strip lib prefix and .so suffix: libgz-sim-sensors-system.so -> gz-sim-sensors-system
+            if name.startswith("lib"):
+                name = name[3:]
+            if name.endswith(".so"):
+                name = name[:-3]
+            installed_plugins.add(name)
+
+    for sdf_file in sdf_files:
+        rel = _relative(sdf_file, pkg_dir)
+        sdf_source = _source(pkg_name, rel)
+        try:
+            tree = ET.parse(sdf_file)
+        except ET.ParseError as exc:
+            findings.append(
+                Finding(
+                    "ERROR",
+                    f"Invalid SDF XML: {exc}",
+                    source=sdf_source,
+                ),
+            )
+            continue
+
+        # Find all <plugin> elements anywhere in the tree
+        for plugin_elem in tree.iter("plugin"):
+            filename = plugin_elem.get("filename", "")
+            if not filename:
+                continue
+            # Only check gz-sim-* style plugin filenames
+            if not filename.startswith("gz-sim-"):
+                continue
+            if filename not in installed_plugins:
+                # Try to suggest the closest match
+                suggestion = None
+                # Common typo: trailing 's' (e.g. 'sensors-systems' -> 'sensors-system')
+                singular = filename[:-1] if filename.endswith("s") else None
+                if singular and singular in installed_plugins:
+                    suggestion = singular
+                else:
+                    # Simple substring match
+                    matches = [p for p in installed_plugins if filename.replace("-", "") in p.replace("-", "") or p in filename or filename in p]
+                    if len(matches) == 1:
+                        suggestion = matches[0]
+                detail = f"filename=\"{filename}\" not found in {plugin_dir}"
+                if suggestion:
+                    detail += f" — did you mean \"{suggestion}\"?"
+                findings.append(
+                    Finding(
+                        "ERROR",
+                        f"SDF plugin {detail}",
+                        source=sdf_source,
+                    ),
+                )
+            else:
+                findings.append(
+                    Finding(
+                        "INFO",
+                        f"SDF plugin filename=\"{filename}\" OK",
+                        source=sdf_source,
+                    ),
+                )
 
 
 def _parse_bridge_yaml(path: Path) -> list[dict[str, str]]:
