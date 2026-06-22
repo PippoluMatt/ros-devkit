@@ -162,6 +162,7 @@ scripts/configure_ros_devkit.sh --agent custom --namespace-root /path/to/skills/
 | --- | --- |
 | `description-scaffold` | Dispatched to skill script — scaffold, verify, or split URDF/xacro packages |
 | `gazebo-simulation` | Dispatched to skill script — set up or diagnose ROS2 Gazebo simulation wiring |
+| `ros2-control-pluginize` | Dispatched to skill script — check ros2_control pluginlib wiring |
 | `doctor` | Built-in — check config and validate that mapped scripts exist |
 | `update` | Built-in — update an installer-managed install from latest `main` |
 | `--help` | Show available commands |
@@ -192,6 +193,17 @@ ros-devkit description-scaffold --split
 ```bash
 ros-devkit gazebo-simulation --diagnose
 ros-devkit gazebo-simulation --setup ~/ros2_ws/src --robot-name my_robot
+```
+
+### ros2-control-pluginize
+
+| Mode | Description |
+| --- | --- |
+| `--check <package-dir>` | Statically validate one existing `_hardware` or `_controllers` package for pluginlib XML, export macro, package dependencies, and CMake wiring |
+
+```bash
+ros-devkit ros2-control-pluginize --check my_robot_hardware
+ros-devkit ros2-control-pluginize --check my_robot_controllers
 ```
 
 ### doctor
