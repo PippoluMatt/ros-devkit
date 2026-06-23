@@ -112,6 +112,27 @@ def dependency_commands(text: str, command: str) -> dict[str, set[str]]:
 
 # ── specialised extractors ──────────────────────────────────────────
 
+def installed_share_directories(text: str) -> set[str]:
+    """Return directory names installed to ``share/${PROJECT_NAME}``.
+
+    Parses every ``install(DIRECTORY ... DESTINATION share/${PROJECT_NAME})``
+    call in *text* (after stripping comments) and returns the set of
+    directory basenames.
+    """
+    uncommented = strip_cmake_comments(text)
+    installed: set[str] = set()
+    for match in re.finditer(
+        r"install\s*\(\s*DIRECTORY\s+(?P<dirs>.*?)\s+DESTINATION\s+share/\$\{PROJECT_NAME\}",
+        uncommented,
+        re.DOTALL,
+    ):
+        for token in re.split(r"[\s;]+", match.group("dirs").strip()):
+            directory = token.strip("\"'").replace("\\", "/").rstrip("/")
+            basename = directory.split("/")[-1]
+            if basename:
+                installed.add(basename)
+    return installed
+
 def plugin_export_calls(text: str) -> list[tuple[str, str]]:
     exports: list[tuple[str, str]] = []
     for body in command_calls(text, "pluginlib_export_plugin_description_file"):

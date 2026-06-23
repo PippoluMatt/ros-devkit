@@ -46,8 +46,12 @@ _Avoid_: Diagnostic, result, issue
 A string identifying where a finding originates, formatted as `package:rel_path` (e.g., `my_hardware:CMakeLists.txt`). Used in finding output so the user can trace a problem back to a file.
 _Avoid_: Source ref, location tag
 
+**Skill-local library package**:
+A Python package under `scripts/` that holds modules for one specific curated skill (e.g., `ros2_control_pluginize_lib/`, `description_scaffold_lib/`, `gazebo_simulation_lib/`). Each has a `__main__.py` that bootstraps `sys.path` so shared packages resolve, a `cli.py` for argument parsing and mode dispatch, and concern-specific modules. The `ros-devkit` CLI dispatches to these via `registry.py`.
+_Avoid_: Private package, per-skill lib
+
 **Skill-local script**:
-A script owned by one curated skill because its behavior is specific to that skill.
+A script owned by one curated skill because its behavior is specific to that skill. Pre-migration, these lived inside the skill folder (e.g., `description-scaffold/scripts/`); post-migration, they are consolidated into a skill-local library package under `scripts/`.
 _Avoid_: Private script, per-skill script
 
 **Launch file**:

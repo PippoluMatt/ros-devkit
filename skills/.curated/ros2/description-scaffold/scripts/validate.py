@@ -8,6 +8,7 @@ structure and reports findings as ERROR, WARN, and INFO.
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import sys
 import xml.etree.ElementTree as ET
@@ -16,7 +17,13 @@ from pathlib import Path
 SHARED_SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
 sys.path.insert(0, str(SHARED_SCRIPTS))
 
+from cmake_lib.parsing import installed_share_directories  # noqa: E402
 from cmake_lib.transforms import remove_default_lint_block  # noqa: E402
+from package_xml_lib.parsing import (  # noqa: E402
+    read_dependencies,
+    read_package_name,
+    robot_name_from_package,
+)
 from utils.diagnostics import Finding, format_severity, print_finding  # noqa: E402
 
 RESOURCE_INSTALL_DIRS = ("urdf", "meshes", "rviz", "config", "launch")
@@ -38,23 +45,7 @@ def _print_finding(
 
 def find_package_name(pkg_dir: Path) -> str:
     """Determine the package name from package.xml or directory name."""
-    pkg_xml = pkg_dir / "package.xml"
-    if pkg_xml.exists():
-        try:
-            tree = ET.parse(pkg_xml)
-            name_elem = tree.getroot().find("name")
-            if name_elem is not None and name_elem.text:
-                return name_elem.text.strip()
-        except ET.ParseError:
-            pass
-    return pkg_dir.name
-
-
-def robot_name_from_package(pkg_name: str) -> str:
-    """Derive the robot name from a <robot_name>_description package name."""
-    if pkg_name.endswith("_description"):
-        return pkg_name[: -len("_description")]
-    return pkg_name
+    return read_package_name(pkg_dir / "package.xml")
 
 
 def extract_includes(filepath: Path) -> list[str]:
@@ -173,24 +164,11 @@ def _present_resource_directories(pkg_dir: Path) -> list[str]:
     ]
 
 
-def _cmake_without_comments(text: str) -> str:
-    return "\n".join(line.split("#", 1)[0] for line in text.splitlines())
-
-
 def _installed_share_directories(cmake_content: str) -> set[str]:
-    uncommented = _cmake_without_comments(cmake_content)
-    installed: set[str] = set()
-    for match in re.finditer(
-        r"install\s*\(\s*DIRECTORY\s+(?P<dirs>.*?)\s+DESTINATION\s+share/\$\{PROJECT_NAME\}",
-        uncommented,
-        re.DOTALL,
-    ):
-        for token in re.split(r"[\s;]+", match.group("dirs").strip()):
-            directory = token.strip("\"'").replace("\\", "/").rstrip("/")
-            basename = directory.split("/")[-1]
-            if basename in RESOURCE_INSTALL_DIRS:
-                installed.add(basename)
-    return installed
+    return {
+        d for d in installed_share_directories(cmake_content)
+        if d in RESOURCE_INSTALL_DIRS
+    }
 
 
 def _has_generated_lint_block(cmake_content: str) -> bool:
@@ -373,13 +351,7 @@ def validate(pkg_dir: str | Path | None = None) -> bool:
     pkg_xml = pkg_dir / "package.xml"
     if pkg_xml.exists():
         try:
-            tree = ET.parse(pkg_xml)
-            root = tree.getroot()
-            deps: set[str] = set()
-            for tag in ["depend", "exec_depend", "build_depend", "run_depend"]:
-                for dep in root.findall(tag):
-                    if dep.text:
-                        deps.add(dep.text.strip())
+            deps = read_dependencies(pkg_xml)
 
             if "xacro" in deps:
                 infos.append("package.xml lists xacro dependency")
@@ -391,7 +363,7 @@ def validate(pkg_dir: str | Path | None = None) -> bool:
             else:
                 warnings.append("package.xml missing urdf dependency")
 
-        except ET.ParseError as e:
+        except ValueError as e:
             errors.append(f"package.xml is not valid XML: {e}")
 
     # CMakeLists.txt checks.
