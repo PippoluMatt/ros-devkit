@@ -1,10 +1,12 @@
-#!/usr/bin/env python3
-"""Shared CMakeLists.txt transformations for ROS2 curated skills."""
+"""Generic CMake text transforms for ROS2 curated skills.
+
+These functions read and modify CMakeLists.txt text without any knowledge of
+plugin-specific concepts.  They are shared by the ``cmakelists``,
+``description-scaffold``, and ``gazebo-simulation`` skills.
+"""
 
 from __future__ import annotations
 
-import argparse
-from pathlib import Path
 import re
 
 
@@ -120,6 +122,8 @@ def add_install_share_directories(text: str, directories: list[str]) -> str:
     return text.rstrip() + "\n\n" + block
 
 
+# ── internal helpers ───────────────────────────────────────────────
+
 def _find_dependency_placeholder_start(lines: list[str]) -> int | None:
     for index, line in enumerate(lines):
         if line.strip() == "# uncomment the following section in order to fill in":
@@ -157,74 +161,3 @@ def _find_matching_endif(lines: list[str], start: int) -> int | None:
             if depth == 0:
                 return index
     return None
-
-
-def _read_text(path: Path) -> str:
-    return path.read_text(encoding="utf-8")
-
-
-def _write_if_changed(path: Path, before: str, after: str) -> bool:
-    if after == before:
-        return False
-    path.write_text(after, encoding="utf-8")
-    return True
-
-
-def _mutate_file(path: Path, transform) -> int:
-    before = _read_text(path)
-    after = transform(before)
-    changed = _write_if_changed(path, before, after)
-    print("updated" if changed else "unchanged")
-    return 0
-
-
-def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=__doc__)
-    subcommands = parser.add_subparsers(dest="command", required=True)
-
-    remove = subcommands.add_parser(
-        "remove-default-lint-block",
-        help="remove the generated ROS2 dependency/lint placeholder block",
-    )
-    remove.add_argument("cmakelists", type=Path)
-
-    include = subcommands.add_parser(
-        "add-include-directories",
-        help="add include_directories(include) after find_package(...) rules",
-    )
-    include.add_argument("cmakelists", type=Path)
-
-    install = subcommands.add_parser(
-        "add-install-share-directories",
-        help="add or update share-directory installation rules",
-    )
-    install.add_argument("cmakelists", type=Path)
-    install.add_argument("directories", nargs="+")
-
-    normalize = subcommands.add_parser(
-        "normalize-dir-name",
-        help="normalize and validate a package-relative directory name",
-    )
-    normalize.add_argument("directory")
-    return parser
-
-
-def main(argv: list[str] | None = None) -> int:
-    args = _build_parser().parse_args(argv)
-    if args.command == "remove-default-lint-block":
-        return _mutate_file(args.cmakelists, remove_default_lint_block)
-    if args.command == "add-include-directories":
-        return _mutate_file(args.cmakelists, add_include_directories)
-    if args.command == "add-install-share-directories":
-        return _mutate_file(
-            args.cmakelists,
-            lambda text: add_install_share_directories(text, args.directories),
-        )
-    if args.command == "normalize-dir-name":
-        print(normalize_dir_name(args.directory))
-        return 0
-    raise AssertionError(f"unhandled command: {args.command}")
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

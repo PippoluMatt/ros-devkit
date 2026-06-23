@@ -16,8 +16,10 @@ import urllib.error
 SHARED_SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
 sys.path.insert(0, str(SHARED_SCRIPTS))
 
-from cmake import add_install_share_directories  # noqa: E402
-from diagnostics import Finding, print_finding  # noqa: E402
+from cmake_lib.transforms import add_install_share_directories  # noqa: E402
+from utils.diagnostics import Finding, print_finding, source as _source  # noqa: E402
+from utils.fs import relative as _relative  # noqa: E402
+from utils.xml import local_name as _local_name  # noqa: E402
 
 DISCOVERY_SKIP_DIRS = {".git", ".venv", "__pycache__", "build", "install", "log"}
 PLUGIN_REGISTRY_PATH = Path(__file__).resolve().parent.parent / "references" / "plugin_registry.yaml"
@@ -234,23 +236,6 @@ def discover_context(
         errors.extend(discovered_errors)
 
     return Context(search_root, description_pkg, bringup_pkg, errors)
-
-
-def _local_name(tag: str) -> str:
-    return tag.rsplit("}", 1)[-1] if "}" in tag else tag
-
-
-def _relative(path: Path, root: Path) -> str:
-    try:
-        return str(path.relative_to(root))
-    except ValueError:
-        return str(path)
-
-
-def _source(pkg_name: str, rel_path: str | None = None) -> str:
-    if rel_path:
-        return f"{pkg_name}:{rel_path}"
-    return pkg_name
 
 
 def _cmake_without_comments(text: str) -> str:

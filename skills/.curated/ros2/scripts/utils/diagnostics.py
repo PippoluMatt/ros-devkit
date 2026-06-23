@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-"""Shared terminal diagnostic formatting for ROS2 skill scripts."""
+"""Diagnostic output formatting: findings, severity colours, and source labels."""
 
 from __future__ import annotations
 
@@ -46,3 +45,10 @@ def format_finding(finding: Finding, color: bool | None = None) -> str:
 
 def print_finding(finding: Finding, color: bool | None = None) -> None:
     print(format_finding(finding, color))
+
+
+def source(package_name: str, rel_path: str | None = None) -> str:
+    """Format a diagnostic source label as ``package:rel_path``."""
+    if rel_path:
+        return f"{package_name}:{rel_path}"
+    return package_name

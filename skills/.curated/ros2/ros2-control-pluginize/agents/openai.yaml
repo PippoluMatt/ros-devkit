@@ -1,0 +1,4 @@
+interface:
+  display_name: "ROS2 Control Pluginize"
+  short_description: "Convert ROS2 control packages to plugins"
+  default_prompt: "Use $ros2-control-pluginize to turn this ROS2 controller or hardware interface package into a pluginlib plugin."

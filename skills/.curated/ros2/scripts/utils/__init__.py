@@ -1,0 +1,1 @@
+"""Cross-cutting infrastructure shared by all curated ros2 skills."""

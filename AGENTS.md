@@ -25,9 +25,11 @@ Do not edit `src/ros_devkit.egg-info/` directly unless the task explicitly requi
 There is no repository-wide build step. Validate the files you change directly:
 
 - `python3 -m unittest discover -s tests` runs the CLI, config, install, and update tests.
-- `python3 skills/.curated/ros2/scripts/test_cmake.py` runs tests for shared CMake transformation helpers.
 - `python3 -m py_compile src/ros_devkit/*.py` checks CLI package syntax.
 - `python3 -m py_compile skills/.curated/ros2/<skill>/scripts/*.py` checks skill-local script syntax.
+- `python3 -m py_compile skills/.curated/ros2/scripts/cmake_lib/*.py skills/.curated/ros2/scripts/ros2_control_pluginize_lib/*.py skills/.curated/ros2/scripts/utils/*.py` checks shared library syntax.
+- `python3 -m unittest discover -s skills/.curated/ros2/description-scaffold/checks` runs description-scaffold validation checks.
+- `python3 -m unittest discover -s skills/.curated/ros2/gazebo-simulation/checks` runs gazebo-simulation checks.
 - `bash -n scripts/install.sh scripts/update.sh scripts/configure_ros_devkit.sh scripts/dev_ros_devkit.sh` checks shell script syntax.
 - `scripts/dev_ros_devkit.sh doctor` verifies the checkout dispatcher can find curated skill scripts.
 - `python3 skills/.curated/ros2/description-scaffold/scripts/validate.py <package-dir>` validates generated description packages.

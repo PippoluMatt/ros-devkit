@@ -162,6 +162,7 @@ scripts/configure_ros_devkit.sh --agent custom --namespace-root /path/to/skills/
 | --- | --- |
 | `description-scaffold` | Dispatched to skill script — scaffold, verify, or split URDF/xacro packages |
 | `gazebo-simulation` | Dispatched to skill script — set up or diagnose ROS2 Gazebo simulation wiring |
+| `ros2-control-pluginize` | Dispatched to skill script — check or add ros2_control pluginlib wiring |
 | `doctor` | Built-in — check config and validate that mapped scripts exist |
 | `update` | Built-in — update an installer-managed install from latest `main` |
 | `--help` | Show available commands |
@@ -194,6 +195,19 @@ ros-devkit gazebo-simulation --diagnose
 ros-devkit gazebo-simulation --setup ~/ros2_ws/src --robot-name my_robot
 ```
 
+### ros2-control-pluginize
+
+| Mode | Description |
+| --- | --- |
+| `--check <package-dir>` | Statically validate one existing `_hardware` or `_controllers` package for pluginlib XML, export macro, package dependencies, and CMake wiring |
+| `--pluginize <package-dir>` | Add missing pluginlib XML, source export, package dependencies, and CMake wiring, then run `--check` |
+
+```bash
+ros-devkit ros2-control-pluginize --check my_robot_hardware
+ros-devkit ros2-control-pluginize --pluginize my_robot_hardware
+ros-devkit ros2-control-pluginize --check my_robot_controllers
+```
+
 ### doctor
 
 ```bash
@@ -224,7 +238,8 @@ installs should be updated by pulling the checkout and reinstalling locally.
 | | [`ros2-sensor`](skills/.curated/ros2/ros2-sensor/SKILL.md) | Create and review ROS2 sensor interfaces |
 | **Robot Description & Control** | [`description-scaffold`](skills/.curated/ros2/description-scaffold/SKILL.md) | Scaffold and validate ROS2 URDF/xacro description packages |
 | | [`gazebo-simulation`](skills/.curated/ros2/gazebo-simulation/SKILL.md) | Set up and diagnose ROS2 Gazebo simulation wiring |
-| | [`ros2-control`](skills/.curated/ros2/ros2-control/SKILL.md) | Create ROS2 control plugins and xacro |
+| | [`ros2-control`](skills/.curated/ros2/ros2-control/SKILL.md) | Scaffold SystemInterface hardware packages and xacro |
+| | [`ros2-control-pluginize`](skills/.curated/ros2/ros2-control-pluginize/SKILL.md) | Convert ROS2 control packages to pluginlib plugins |
 | **MCU & Embedded** | [`mcu-freertos`](skills/.curated/ros2/mcu-freertos/SKILL.md) | Build and maintain MCU RTOS firmware |
 | | [`mcu-protocol`](skills/.curated/ros2/mcu-protocol/SKILL.md) | Design MCU wire protocols for ROS2 |
 | **Project & Deployment** | [`robot-profile`](skills/.curated/ros2/robot-profile/SKILL.md) | Capture ROS2 robot hardware context |
@@ -240,7 +255,7 @@ depend on node interfaces.
 ```
 ros-devkit/
 ├── src/ros_devkit/          # CLI dispatcher package
-├── skills/.curated/ros2/    # Curated skill collection (11 skills)
+├── skills/.curated/ros2/    # Curated skill collection (12 skills)
 │   ├── cmakelists/
 │   ├── cpp-node/
 │   ├── description-scaffold/
@@ -250,6 +265,7 @@ ros-devkit/
 │   ├── mcu-protocol/
 │   ├── robot-profile/
 │   ├── ros2-control/
+│   ├── ros2-control-pluginize/
 │   ├── ros2-dockerfile/
 │   └── ros2-sensor/
 ├── scripts/                 # Setup & configuration scripts

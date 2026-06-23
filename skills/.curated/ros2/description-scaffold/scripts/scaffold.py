@@ -17,7 +17,7 @@ from pathlib import Path
 SHARED_SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
 sys.path.insert(0, str(SHARED_SCRIPTS))
 
-from cmake import add_install_share_directories, remove_default_lint_block  # noqa: E402
+from cmake_lib.transforms import add_install_share_directories, remove_default_lint_block  # noqa: E402
 
 
 # ── Xacro templates ─────────────────────────────────────────────────

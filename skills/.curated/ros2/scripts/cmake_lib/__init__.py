@@ -1,0 +1,1 @@
+"""Shared CMake text manipulation for curated ros2 skills."""
