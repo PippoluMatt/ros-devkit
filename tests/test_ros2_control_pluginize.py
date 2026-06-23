@@ -25,7 +25,7 @@ SHARED_SCRIPTS = REPO_ROOT / "skills" / ".curated" / "ros2" / "scripts"
 class Ros2ControlPluginizeCheckTest(unittest.TestCase):
     def test_dev_runner_doctor_reports_registered_command(self) -> None:
         completed = subprocess.run(
-            [str(REPO_ROOT / "scripts" / "dev_ros_devkit.sh"), "doctor"],
+            [str(REPO_ROOT / "install" / "dev_ros_devkit.sh"), "doctor"],
             cwd=REPO_ROOT,
             text=True,
             stdout=subprocess.PIPE,

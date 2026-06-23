@@ -20,17 +20,54 @@ agent=""
 agent_skill_root=""
 agent_skill_root_supplied=0
 agent_supplied=0
-ref="$DEFAULT_REF"
+REF="$DEFAULT_REF"
 ref_supplied=0
 interactive=0
 local_sandbox=0
 local_sandbox_root=""
 temp_paths=()
 
+# ---------------------------------------------------------------------------
+# Source shared library
+# ---------------------------------------------------------------------------
+
+_source_common() {
+  local script_dir
+  local lib_path
+
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)" || script_dir=""
+  lib_path="$script_dir/lib/install_common.sh"
+
+  if [[ -f "$lib_path" ]]; then
+    source "$lib_path"
+    return 0
+  fi
+
+  # Running from pipe (curl | bash); fetch library from remote.
+  local lib_url="${REPO_URL%.git}/raw/${DEFAULT_REF}/install/lib/install_common.sh"
+  local lib_temp
+  lib_temp="$(mktemp "${TMPDIR:-/tmp}/ros-devkit-common.XXXXXX")"
+  temp_paths+=("$lib_temp")
+
+  if ! curl -fsSL "$lib_url" -o "$lib_temp" 2>/dev/null; then
+    printf 'ERROR: Failed to download shared library from %s\n' "$lib_url" >&2
+    rm -f "$lib_temp"
+    exit 1
+  fi
+  source "$lib_temp"
+}
+
+_source_common
+trap cleanup EXIT
+
+# ---------------------------------------------------------------------------
+# Install-specific functions
+# ---------------------------------------------------------------------------
+
 usage() {
   cat <<'EOF'
-usage: scripts/install.sh [--agent codex|claude|pi|custom] [--skill-root PATH] [--ref REF]
-       scripts/install.sh --local-sandbox PATH
+usage: install/install.sh [--agent codex|claude|pi|custom] [--skill-root PATH] [--ref REF]
+       install/install.sh --local-sandbox PATH
 
 Install ros-devkit for an AI agent target.
 
@@ -42,46 +79,13 @@ Options:
   -h, --help       Show this help.
 
 Examples:
-  scripts/install.sh
-  scripts/install.sh --agent codex
-  scripts/install.sh --agent claude
-  scripts/install.sh --agent pi
-  scripts/install.sh --agent custom --skill-root ~/.config/my-agent/skills
-  scripts/install.sh --local-sandbox .dev-install
+  install/install.sh
+  install/install.sh --agent codex
+  install/install.sh --agent claude
+  install/install.sh --agent pi
+  install/install.sh --agent custom --skill-root ~/.config/my-agent/skills
+  install/install.sh --local-sandbox .dev-install
 EOF
-}
-
-log() {
-  printf '%s\n' "$*"
-}
-
-die() {
-  printf 'ERROR: %s\n' "$*" >&2
-  exit 1
-}
-
-cleanup() {
-  local path
-  for path in "${temp_paths[@]}"; do
-    if [[ -n "$path" && -e "$path" ]]; then
-      rm -rf "$path"
-    fi
-  done
-}
-trap cleanup EXIT
-
-expand_path() {
-  case "$1" in
-    "~")
-      printf '%s\n' "$HOME"
-      ;;
-    "~/"*)
-      printf '%s\n' "$HOME/${1#~/}"
-      ;;
-    *)
-      printf '%s\n' "$1"
-      ;;
-  esac
 }
 
 absolute_path() {
@@ -103,30 +107,11 @@ checkout_root() {
 
   script_path="${BASH_SOURCE[0]}"
   if [[ ! -f "$script_path" ]]; then
-    die "--local-sandbox requires running scripts/install.sh from a local checkout."
+    die "--local-sandbox requires running install/install.sh from a local checkout."
   fi
 
   script_dir="$(cd "$(dirname "$script_path")" && pwd)"
   cd "$script_dir/.." && pwd
-}
-
-need_command() {
-  if ! command -v "$1" >/dev/null 2>&1; then
-    die "Missing required command: $1"
-  fi
-}
-
-prompt_tty() {
-  local prompt="$1"
-  local value
-
-  if [[ ! -r /dev/tty || ! -w /dev/tty ]]; then
-    die "Interactive install requires a TTY. Pass --agent codex|claude|pi, or --agent custom --skill-root PATH."
-  fi
-
-  printf '%s' "$prompt" > /dev/tty
-  IFS= read -r value < /dev/tty || die "No input received."
-  printf '%s\n' "$value"
 }
 
 parse_args() {
@@ -146,7 +131,7 @@ parse_args() {
         ;;
       --ref)
         [[ $# -ge 2 ]] || die "--ref requires a value"
-        ref="$2"
+        REF="$2"
         ref_supplied=1
         shift 2
         ;;
@@ -197,7 +182,7 @@ configure_local_sandbox() {
   BIN_PATH="$BIN_DIR/ros-devkit"
   MANAGED_BIN_TARGET="$VENV_DIR/bin/ros-devkit"
   CONFIG_FILE="$local_sandbox_root/config/ros-devkit/config.env"
-  ref="local-sandbox"
+  REF="local-sandbox"
 }
 
 select_agent() {
@@ -207,38 +192,11 @@ select_agent() {
       die "Interactive install requires a TTY. Pass --agent codex|claude|pi, or --agent custom --skill-root PATH."
     fi
 
-    cat > /dev/tty <<'EOF'
-Select the AI agent target:
-  1) codex  - $HOME/.codex/skills/ros2
-  2) claude - $HOME/.claude/skills/ros2
-  3) pi     - $HOME/.pi/agent/skills/ros2
-  4) custom - provide a parent skills directory
-EOF
+    print_agent_menu /dev/tty
     agent="$(prompt_tty "Agent [codex/claude/pi/custom]: ")"
   fi
 
-  case "$agent" in
-    1)
-      agent="codex"
-      ;;
-    2)
-      agent="claude"
-      ;;
-    3)
-      agent="pi"
-      ;;
-    4)
-      agent="custom"
-      ;;
-  esac
-
-  case "$agent" in
-    codex|claude|pi|custom)
-      ;;
-    *)
-      die "Unsupported agent target: $agent"
-      ;;
-  esac
+  normalize_agent
 }
 
 resolve_skill_root() {
@@ -246,26 +204,17 @@ resolve_skill_root() {
     die "--skill-root is only supported with --agent custom"
   fi
 
-  case "$agent" in
-    codex)
-      agent_skill_root="$HOME/.codex/skills"
-      ;;
-    claude)
-      agent_skill_root="$HOME/.claude/skills"
-      ;;
-    pi)
-      agent_skill_root="$HOME/.pi/agent/skills"
-      ;;
-    custom)
-      if [[ -z "$agent_skill_root" ]]; then
-        if [[ "$interactive" -eq 1 ]]; then
-          agent_skill_root="$(prompt_tty "Custom parent skills directory: ")"
-        else
-          die "--agent custom requires --skill-root PATH"
-        fi
+  if [[ "$agent" != "custom" ]]; then
+    agent_skill_root="$(agent_skill_root_for "$agent")"
+  else
+    if [[ -z "$agent_skill_root" ]]; then
+      if [[ "$interactive" -eq 1 ]]; then
+        agent_skill_root="$(prompt_tty "Custom parent skills directory: ")"
+      else
+        die "--agent custom requires --skill-root PATH"
       fi
-      ;;
-  esac
+    fi
+  fi
 
   agent_skill_root="$(expand_path "$agent_skill_root")"
   namespace_root="$agent_skill_root/$NAMESPACE"
@@ -413,7 +362,7 @@ Install ros-devkit
   Source checkout  : $SOURCE_DIR
   CLI venv         : $VENV_DIR
   CLI command      : $BIN_PATH
-  Git ref          : $ref
+  Git ref          : $REF
 EOF
 }
 
@@ -433,74 +382,6 @@ confirm_interactive() {
       exit 0
       ;;
   esac
-}
-
-acquire_source_with_git() {
-  local tmp_source
-  tmp_source="$(mktemp -d "${TMPDIR:-/tmp}/ros-devkit-source.XXXXXX")"
-  temp_paths+=("$tmp_source")
-
-  log "Fetching ros-devkit source with git..."
-  git -C "$tmp_source" init -q
-  git -C "$tmp_source" remote add origin "$REPO_URL"
-  git -C "$tmp_source" fetch --depth 1 origin "$ref"
-  git -C "$tmp_source" checkout -q --detach FETCH_HEAD
-
-  printf 'repo=%s\nref=%s\n' "$REPO_URL" "$ref" > "$tmp_source/$MARKER_FILE"
-
-  mkdir -p "$INSTALL_HOME"
-  if [[ -e "$SOURCE_DIR" ]]; then
-    rm -rf "$SOURCE_DIR"
-  fi
-  mv "$tmp_source" "$SOURCE_DIR"
-}
-
-acquire_source_with_archive() {
-  local tmp_dir
-  local archive_path
-  local extracted=""
-  local candidate
-
-  tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/ros-devkit-archive.XXXXXX")"
-  temp_paths+=("$tmp_dir")
-  archive_path="$tmp_dir/source.tar.gz"
-
-  log "Fetching ros-devkit source archive..."
-  curl -fsSL "$ARCHIVE_BASE_URL/$ref.tar.gz" -o "$archive_path"
-  tar -xzf "$archive_path" -C "$tmp_dir"
-
-  for candidate in "$tmp_dir"/ros-devkit-*; do
-    if [[ -d "$candidate" ]]; then
-      extracted="$candidate"
-      break
-    fi
-  done
-
-  [[ -n "$extracted" ]] || die "Downloaded archive did not contain a ros-devkit source directory."
-
-  printf 'repo=%s\nref=%s\n' "$REPO_URL" "$ref" > "$extracted/$MARKER_FILE"
-
-  mkdir -p "$INSTALL_HOME"
-  if [[ -e "$SOURCE_DIR" ]]; then
-    rm -rf "$SOURCE_DIR"
-  fi
-  mv "$extracted" "$SOURCE_DIR"
-}
-
-acquire_source() {
-  if command -v git >/dev/null 2>&1; then
-    acquire_source_with_git
-  else
-    acquire_source_with_archive
-  fi
-
-  if [[ ! -d "$SOURCE_DIR/skills/.curated/$NAMESPACE" ]]; then
-    die "Fetched source is missing skills/.curated/$NAMESPACE"
-  fi
-
-  if [[ ! -f "$SOURCE_DIR/pyproject.toml" ]]; then
-    die "Fetched source is missing pyproject.toml"
-  fi
 }
 
 acquire_source_from_checkout() {
@@ -526,7 +407,6 @@ acquire_source_from_checkout() {
     "$tmp_source/.venv" \
     "$tmp_source/.pytest_cache" \
     "$tmp_source/build" \
-    "$tmp_source/install" \
     "$tmp_source/log"
   find "$tmp_source" -type d -name '__pycache__' -prune -exec rm -rf {} +
   find "$tmp_source" -type f -name '*.pyc' -delete
@@ -544,24 +424,7 @@ acquire_source_from_checkout() {
 install_cli() {
   log "Installing ros-devkit CLI..."
   python3 -m venv "$VENV_DIR"
-
-  {
-    echo '#!/usr/bin/env bash'
-    echo 'set -euo pipefail'
-    printf 'ROS_DEVKIT_SOURCE=%q\n' "$SOURCE_DIR"
-    printf 'ROS_DEVKIT_PYTHON=%q\n' "$VENV_DIR/bin/python"
-    if [[ "$local_sandbox" -eq 1 ]]; then
-      printf 'ROS_DEVKIT_CONFIG=%q\n' "$CONFIG_FILE"
-      printf 'ROS_DEVKIT_LOCAL_SANDBOX=%q\n' "$local_sandbox_root"
-      echo 'export ROS_DEVKIT_SOURCE ROS_DEVKIT_PYTHON ROS_DEVKIT_CONFIG ROS_DEVKIT_LOCAL_SANDBOX'
-    else
-      echo 'export ROS_DEVKIT_SOURCE ROS_DEVKIT_PYTHON'
-    fi
-    echo 'PYTHONPATH="$ROS_DEVKIT_SOURCE/src${PYTHONPATH:+:$PYTHONPATH}"'
-    echo 'export PYTHONPATH'
-    echo 'exec "$ROS_DEVKIT_PYTHON" -m ros_devkit.cli "$@"'
-  } > "$MANAGED_BIN_TARGET"
-  chmod +x "$MANAGED_BIN_TARGET"
+  write_cli_wrapper "$MANAGED_BIN_TARGET" "$local_sandbox"
 
   mkdir -p "$BIN_DIR"
   ln -sfn "$MANAGED_BIN_TARGET" "$BIN_PATH"
@@ -577,8 +440,7 @@ install_skills() {
   temp_paths+=("$tmp_namespace")
 
   cp -R "$source_namespace/." "$tmp_namespace/"
-  find "$tmp_namespace" -type d -name '__pycache__' -prune -exec rm -rf {} +
-  find "$tmp_namespace" -type f \( -name '*.pyc' -o -name '.DS_Store' \) -delete
+  clean_namespace "$tmp_namespace"
 
   if [[ -e "$namespace_root" ]]; then
     die "Namespace root appeared during install: $namespace_root"
@@ -590,9 +452,9 @@ install_skills() {
 configure_cli() {
   log "Configuring ros-devkit..."
   if [[ "$local_sandbox" -eq 1 ]]; then
-    XDG_CONFIG_HOME="$local_sandbox_root/config" "$SOURCE_DIR/scripts/configure_ros_devkit.sh" --agent "$agent" --namespace-root "$namespace_root"
+    XDG_CONFIG_HOME="$local_sandbox_root/config" "$SOURCE_DIR/install/configure_ros_devkit.sh" --agent "$agent" --namespace-root "$namespace_root"
   else
-    "$SOURCE_DIR/scripts/configure_ros_devkit.sh" --agent "$agent" --namespace-root "$namespace_root"
+    "$SOURCE_DIR/install/configure_ros_devkit.sh" --agent "$agent" --namespace-root "$namespace_root"
   fi
 }
 
@@ -642,7 +504,22 @@ main() {
     print_plan
     acquire_source_from_checkout
   else
-    acquire_source
+    print_plan
+    local tmp_source
+    tmp_source="$(mktemp -d "${TMPDIR:-/tmp}/ros-devkit-source.XXXXXX")"
+    temp_paths+=("$tmp_source")
+    acquire_source "$tmp_source"
+    if [[ ! -d "$tmp_source/skills/.curated/$NAMESPACE" ]]; then
+      die "Fetched source is missing skills/.curated/$NAMESPACE"
+    fi
+    if [[ ! -f "$tmp_source/pyproject.toml" ]]; then
+      die "Fetched source is missing pyproject.toml"
+    fi
+    mkdir -p "$INSTALL_HOME"
+    if [[ -e "$SOURCE_DIR" ]]; then
+      rm -rf "$SOURCE_DIR"
+    fi
+    mv "$tmp_source" "$SOURCE_DIR"
   fi
   install_cli
   install_skills

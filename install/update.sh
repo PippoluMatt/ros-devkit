@@ -8,7 +8,7 @@ NAMESPACE="ros2"
 MARKER_FILE=".ros-devkit-source"
 
 INSTALL_HOME="${ROS_DEVKIT_INSTALL_HOME:-$HOME/.local/share/ros-devkit}"
-SOURCE_DIR="${ROS_DEVKIT_SOURCE:-$INSTALL_HOME/source}"
+SOURCE_DIR="$INSTALL_HOME/source"
 VENV_DIR="$INSTALL_HOME/venv"
 BIN_DIR="${ROS_DEVKIT_BIN_DIR:-$HOME/.local/bin}"
 BIN_PATH="$BIN_DIR/ros-devkit"
@@ -24,6 +24,23 @@ staged_venv=""
 staged_namespace=""
 temp_paths=()
 
+# ---------------------------------------------------------------------------
+# Source shared library
+# ---------------------------------------------------------------------------
+
+_common_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/install_common.sh"
+if [[ ! -f "$_common_lib" ]]; then
+  printf 'ERROR: Shared library not found: %s\n' "$_common_lib" >&2
+  exit 1
+fi
+# shellcheck disable=SC1090
+source "$_common_lib"
+trap cleanup EXIT
+
+# ---------------------------------------------------------------------------
+# Update-specific functions
+# ---------------------------------------------------------------------------
+
 usage() {
   cat <<'EOF'
 usage: ros-devkit update [--dry-run] [--force]
@@ -36,25 +53,6 @@ Options:
   -h, --help Show this help.
 EOF
 }
-
-log() {
-  printf '%s\n' "$*"
-}
-
-die() {
-  printf 'ERROR: %s\n' "$*" >&2
-  exit 1
-}
-
-cleanup() {
-  local path
-  for path in "${temp_paths[@]}"; do
-    if [[ -n "$path" && -e "$path" ]]; then
-      rm -rf "$path"
-    fi
-  done
-}
-trap cleanup EXIT
 
 parse_args() {
   while [[ $# -gt 0 ]]; do
@@ -76,12 +74,6 @@ parse_args() {
         ;;
     esac
   done
-}
-
-need_command() {
-  if ! command -v "$1" >/dev/null 2>&1; then
-    die "Missing required command: $1"
-  fi
 }
 
 config_file() {
@@ -113,15 +105,7 @@ load_config() {
   [[ -n "$agent" ]] || die "Missing ROS_DEVKIT_AGENT in config file: $path"
   [[ -n "$namespace_root" ]] || die "Missing ROS_DEVKIT_SKILL_ROOT in config file: $path"
 
-  case "$namespace_root" in
-    "~")
-      namespace_root="$HOME"
-      ;;
-    "~/"*)
-      namespace_root="$HOME/${namespace_root#~/}"
-      ;;
-  esac
-
+  namespace_root="$(expand_path "$namespace_root")"
   agent_skill_root="$(dirname "$namespace_root")"
 }
 
@@ -175,59 +159,6 @@ new_temp_dir() {
   printf '%s\n' "$path"
 }
 
-acquire_source_with_git() {
-  staged_source="$(new_temp_dir "$INSTALL_HOME/.source.update.XXXXXX")"
-
-  log "Fetching latest ros-devkit main with git..."
-  git -C "$staged_source" init -q
-  git -C "$staged_source" remote add origin "$REPO_URL"
-  git -C "$staged_source" fetch --depth 1 origin "$REF"
-  git -C "$staged_source" checkout -q --detach FETCH_HEAD
-
-  printf 'repo=%s\nref=%s\n' "$REPO_URL" "$REF" > "$staged_source/$MARKER_FILE"
-}
-
-acquire_source_with_archive() {
-  local archive_dir
-  local archive_path
-  local extracted=""
-  local candidate
-
-  archive_dir="$(new_temp_dir "$INSTALL_HOME/.archive.update.XXXXXX")"
-  archive_path="$archive_dir/source.tar.gz"
-
-  log "Fetching latest ros-devkit main archive..."
-  curl -fsSL "$ARCHIVE_BASE_URL/$REF.tar.gz" -o "$archive_path"
-  tar -xzf "$archive_path" -C "$archive_dir"
-
-  for candidate in "$archive_dir"/ros-devkit-*; do
-    if [[ -d "$candidate" ]]; then
-      extracted="$candidate"
-      break
-    fi
-  done
-
-  [[ -n "$extracted" ]] || die "Downloaded archive did not contain a ros-devkit source directory."
-
-  staged_source="$(new_temp_dir "$INSTALL_HOME/.source.update.XXXXXX")"
-  cp -R "$extracted/." "$staged_source/"
-  printf 'repo=%s\nref=%s\n' "$REPO_URL" "$REF" > "$staged_source/$MARKER_FILE"
-}
-
-acquire_source() {
-  if command -v git >/dev/null 2>&1; then
-    acquire_source_with_git
-  else
-    acquire_source_with_archive
-  fi
-}
-
-clean_namespace() {
-  local path="$1"
-  find "$path" -type d -name '__pycache__' -prune -exec rm -rf {} +
-  find "$path" -type f \( -name '*.pyc' -o -name '.DS_Store' \) -delete
-}
-
 check_local_skill_edits() {
   local diff_output
   diff_output="$(mktemp "${TMPDIR:-/tmp}/ros-devkit-diff.XXXXXX")"
@@ -255,21 +186,6 @@ stage_namespace() {
   clean_namespace "$staged_namespace"
 }
 
-write_cli_wrapper() {
-  local wrapper="$1"
-  {
-    echo '#!/usr/bin/env bash'
-    echo 'set -euo pipefail'
-    printf 'ROS_DEVKIT_SOURCE=%q\n' "$SOURCE_DIR"
-    printf 'ROS_DEVKIT_PYTHON=%q\n' "$VENV_DIR/bin/python"
-    echo 'export ROS_DEVKIT_SOURCE ROS_DEVKIT_PYTHON'
-    echo 'PYTHONPATH="$ROS_DEVKIT_SOURCE/src${PYTHONPATH:+:$PYTHONPATH}"'
-    echo 'export PYTHONPATH'
-    echo 'exec "$ROS_DEVKIT_PYTHON" -m ros_devkit.cli "$@"'
-  } > "$wrapper"
-  chmod +x "$wrapper"
-}
-
 stage_venv() {
   staged_venv="$(new_temp_dir "$INSTALL_HOME/.venv.update.XXXXXX")"
   python3 -m venv "$staged_venv"
@@ -279,7 +195,7 @@ stage_venv() {
 validate_staged_source() {
   [[ -f "$staged_source/pyproject.toml" ]] || die "Fetched source is missing pyproject.toml"
   [[ -d "$staged_source/skills/.curated/$NAMESPACE" ]] || die "Fetched source is missing skills/.curated/$NAMESPACE"
-  [[ -f "$staged_source/scripts/update.sh" ]] || die "Fetched source is missing scripts/update.sh"
+  [[ -f "$staged_source/install/update.sh" ]] || die "Fetched source is missing install/update.sh"
 
   PYTHONPATH="$staged_source/src" "$staged_venv/bin/python" -m py_compile "$staged_source"/src/ros_devkit/*.py
   PYTHONPATH="$staged_source/src" "$staged_venv/bin/python" -m ros_devkit.cli --version >/dev/null
@@ -355,7 +271,8 @@ main() {
   preflight_commands
   load_config
   preflight_managed_install
-  acquire_source
+  staged_source="$(new_temp_dir "$INSTALL_HOME/.source.update.XXXXXX")"
+  acquire_source "$staged_source"
   check_local_skill_edits
   stage_namespace
   stage_venv

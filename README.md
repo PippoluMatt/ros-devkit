@@ -35,7 +35,7 @@ If a command fails because the skill root or a mapped script is missing, run
 Install with the curl bootstrap script:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/PippoluMatt/ros-devkit/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/PippoluMatt/ros-devkit/main/install/install.sh | bash
 ```
 
 The installer asks for an agent target first, then installs the CLI and the
@@ -64,14 +64,14 @@ export PATH="$HOME/.local/bin:$PATH"
 For non-interactive installs:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/PippoluMatt/ros-devkit/main/scripts/install.sh | bash -s -- --agent codex
-curl -fsSL https://raw.githubusercontent.com/PippoluMatt/ros-devkit/main/scripts/install.sh | bash -s -- --agent custom --skill-root /path/to/skills
+curl -fsSL https://raw.githubusercontent.com/PippoluMatt/ros-devkit/main/install/install.sh | bash -s -- --agent codex
+curl -fsSL https://raw.githubusercontent.com/PippoluMatt/ros-devkit/main/install/install.sh | bash -s -- --agent custom --skill-root /path/to/skills
 ```
 
 To install a specific Git ref:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/PippoluMatt/ros-devkit/main/scripts/install.sh | bash -s -- --agent codex --ref v0.1.0
+curl -fsSL https://raw.githubusercontent.com/PippoluMatt/ros-devkit/main/install/install.sh | bash -s -- --agent codex --ref v0.1.0
 ```
 
 ## Updating
@@ -108,8 +108,8 @@ without copying skills, writing config, or replacing `~/.local/bin/ros-devkit`:
 
 ```bash
 cd ~/ros-devkit
-scripts/dev_ros_devkit.sh doctor
-scripts/dev_ros_devkit.sh description-scaffold --verify
+install/dev_ros_devkit.sh doctor
+install/dev_ros_devkit.sh description-scaffold --verify
 ```
 
 Do not install the checkout into your user or global Python when you also use
@@ -127,7 +127,7 @@ To test installer behavior from the current checkout, including uncommitted and
 untracked local changes, create an isolated sandbox install:
 
 ```bash
-scripts/install.sh --local-sandbox .dev-install
+install/install.sh --local-sandbox .dev-install
 .dev-install/bin/ros-devkit doctor
 ```
 
@@ -146,14 +146,14 @@ skills, and config under `.dev-install/`:
 Re-running the command replaces an existing marked sandbox. If the target
 directory already exists without a `.ros-devkit-local-sandbox` marker, the
 installer stops rather than deleting it. Sandbox installs do not support
-`ros-devkit update`; re-run `scripts/install.sh --local-sandbox .dev-install`
+`ros-devkit update`; re-run `install/install.sh --local-sandbox .dev-install`
 after changing the checkout.
 
 To configure the stable command to use a custom installed namespace root
 directly:
 
 ```bash
-scripts/configure_ros_devkit.sh --agent custom --namespace-root /path/to/skills/ros2
+install/configure_ros_devkit.sh --agent custom --namespace-root /path/to/skills/ros2
 ```
 
 ## CLI reference
@@ -268,7 +268,7 @@ ros-devkit/
 │   ├── ros2-control-pluginize/
 │   ├── ros2-dockerfile/
 │   └── ros2-sensor/
-├── scripts/                 # Setup & configuration scripts
+├── install/                # Setup, configuration & shared library
 ├── docs/                    # Agent documentation
 ├── pyproject.toml           # Python package metadata
 └── LICENSE
