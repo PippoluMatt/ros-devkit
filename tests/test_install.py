@@ -34,7 +34,7 @@ class InstallCommandTest(unittest.TestCase):
             completed = subprocess.run(
                 [
                     "bash",
-                    str(REPO_ROOT / "scripts" / "install.sh"),
+                    str(REPO_ROOT / "install" / "install.sh"),
                     "--agent",
                     "custom",
                     "--skill-root",
@@ -77,7 +77,7 @@ class InstallCommandTest(unittest.TestCase):
             )
 
             completed = subprocess.run(
-                [str(REPO_ROOT / "scripts" / "dev_ros_devkit.sh"), "doctor"],
+                [str(REPO_ROOT / "install" / "dev_ros_devkit.sh"), "doctor"],
                 cwd=REPO_ROOT,
                 env=env,
                 text=True,
@@ -98,7 +98,7 @@ class InstallCommandTest(unittest.TestCase):
             env = self._sandbox_env(root_path)
 
             completed = subprocess.run(
-                ["bash", str(checkout / "scripts" / "install.sh"), "--local-sandbox", ".dev-install"],
+                ["bash", str(checkout / "install" / "install.sh"), "--local-sandbox", ".dev-install"],
                 cwd=root_path,
                 env=env,
                 text=True,
@@ -166,7 +166,7 @@ class InstallCommandTest(unittest.TestCase):
             sandbox = root_path / ".dev-install"
 
             subprocess.run(
-                ["bash", str(checkout / "scripts" / "install.sh"), "--local-sandbox", ".dev-install"],
+                ["bash", str(checkout / "install" / "install.sh"), "--local-sandbox", ".dev-install"],
                 cwd=root_path,
                 env=env,
                 text=True,
@@ -178,7 +178,7 @@ class InstallCommandTest(unittest.TestCase):
             stale_file.write_text("old sandbox content\n", encoding="utf-8")
 
             subprocess.run(
-                ["bash", str(checkout / "scripts" / "install.sh"), "--local-sandbox", ".dev-install"],
+                ["bash", str(checkout / "install" / "install.sh"), "--local-sandbox", ".dev-install"],
                 cwd=root_path,
                 env=env,
                 text=True,
@@ -192,7 +192,7 @@ class InstallCommandTest(unittest.TestCase):
             unmarked = root_path / "unmarked"
             unmarked.mkdir()
             blocked = subprocess.run(
-                ["bash", str(checkout / "scripts" / "install.sh"), "--local-sandbox", str(unmarked)],
+                ["bash", str(checkout / "install" / "install.sh"), "--local-sandbox", str(unmarked)],
                 cwd=root_path,
                 env=env,
                 text=True,
@@ -220,7 +220,7 @@ class InstallCommandTest(unittest.TestCase):
                     completed = subprocess.run(
                         [
                             "bash",
-                            str(checkout / "scripts" / "install.sh"),
+                            str(checkout / "install" / "install.sh"),
                             "--local-sandbox",
                             f".dev-install-{index}",
                             *extra_args,

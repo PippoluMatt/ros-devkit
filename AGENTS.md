@@ -6,7 +6,7 @@ This repository is a dual-purpose ROS2 DevKit: a small Python CLI dispatcher plu
 
 The CLI package lives under `src/ros_devkit/`. It reads configuration, exposes built-in `doctor` and `update` commands, and dispatches registered skill commands to Python scripts under the configured namespace root. The CLI should not contain ROS2 package-generation logic; that belongs in skill scripts and references.
 
-Installer, updater, and development wrappers live under `scripts/`. Tests live under `tests/` and exercise config loading, installer behavior, local sandbox installs, and updater behavior. Domain language and preferred terms live in `CONTEXT.md`; contribution and conduct docs are `CONTRIBUTING.md` and `CODE_OF_CONDUCT.md`.
+Installer, updater, and development wrappers live under `install/`. A shared bash library at `install/lib/install_common.sh` provides common functions (logging, error handling, source acquisition, CLI wrapper generation, namespace cleaning) sourced by both `install/install.sh` and `install/update.sh`. Tests live under `tests/` and exercise config loading, installer behavior, local sandbox installs, and updater behavior. Domain language and preferred terms live in `CONTEXT.md`; contribution and conduct docs are `CONTRIBUTING.md` and `CODE_OF_CONDUCT.md`.
 
 Curated skills live under `skills/.curated/ros2/<skill-name>/`. Each skill must have a `SKILL.md` with YAML frontmatter and task instructions. Use `references/` for longer optional documentation, `scripts/` for deterministic generators or mutators, `assets/` for reusable templates, and `agents/openai.yaml` for UI metadata. Skill directories use kebab-case, for example `ros2-control`, `mcu-protocol`, and `description-scaffold`.
 
@@ -14,9 +14,9 @@ Curated skills live under `skills/.curated/ros2/<skill-name>/`. Each skill must 
 
 Treat `src/ros_devkit/registry.py` as the public command map for skill-backed CLI commands. When adding or renaming a CLI command, keep the registry entry, `_print_help()` in `src/ros_devkit/cli.py`, relevant README CLI reference text, and tests in sync.
 
-Use `scripts/dev_ros_devkit.sh` to run checkout code and checkout skills during local development. Do not validate checkout changes through a globally installed `ros-devkit` unless the task is specifically about installed behavior.
+Use `install/dev_ros_devkit.sh` to run checkout code and checkout skills during local development. Do not validate checkout changes through a globally installed `ros-devkit` unless the task is specifically about installed behavior.
 
-Use `scripts/install.sh --local-sandbox .dev-install` for isolated installer smoke tests. Local sandbox installs are self-contained and intentionally do not support `ros-devkit update`; re-run the sandbox installer after checkout changes.
+Use `install/install.sh --local-sandbox .dev-install` for isolated installer smoke tests. Local sandbox installs are self-contained and intentionally do not support `ros-devkit update`; re-run the sandbox installer after checkout changes.
 
 Do not edit `src/ros_devkit.egg-info/` directly unless the task explicitly requires regenerating packaged metadata.
 
@@ -30,8 +30,8 @@ There is no repository-wide build step. Validate the files you change directly:
 - `python3 -m py_compile skills/.curated/ros2/scripts/cmake_lib/*.py skills/.curated/ros2/scripts/ros2_control_pluginize_lib/*.py skills/.curated/ros2/scripts/utils/*.py` checks shared library syntax.
 - `python3 -m unittest discover -s skills/.curated/ros2/description-scaffold/checks` runs description-scaffold validation checks.
 - `python3 -m unittest discover -s skills/.curated/ros2/gazebo-simulation/checks` runs gazebo-simulation checks.
-- `bash -n scripts/install.sh scripts/update.sh scripts/configure_ros_devkit.sh scripts/dev_ros_devkit.sh` checks shell script syntax.
-- `scripts/dev_ros_devkit.sh doctor` verifies the checkout dispatcher can find curated skill scripts.
+- `bash -n install/install.sh install/update.sh install/configure_ros_devkit.sh install/dev_ros_devkit.sh` checks shell script syntax.
+- `install/dev_ros_devkit.sh doctor` verifies the checkout dispatcher can find curated skill scripts.
 - `python3 skills/.curated/ros2/description-scaffold/scripts/validate.py <package-dir>` validates generated description packages.
 - `python3 skills/.curated/ros2/ros2-dockerfile/scripts/render_dockerfile.py --target-dir /tmp/dockerfile-check` smoke-tests Dockerfile rendering.
 - `git diff --check` catches trailing whitespace and patch formatting issues.

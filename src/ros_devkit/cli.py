@@ -59,7 +59,7 @@ def _run_update(args: list[str]) -> int:
     if os.environ.get("ROS_DEVKIT_LOCAL_SANDBOX"):
         print(
             "ERROR: update is disabled for local sandbox installs. "
-            "Re-run scripts/install.sh --local-sandbox PATH instead.",
+            "Re-run install/install.sh --local-sandbox PATH instead.",
             file=sys.stderr,
         )
         return 1
@@ -67,7 +67,7 @@ def _run_update(args: list[str]) -> int:
     source_dir = os.environ.get("ROS_DEVKIT_SOURCE")
     if not source_dir:
         candidate_source = Path(__file__).resolve().parents[2]
-        if (candidate_source / "scripts" / "update.sh").is_file():
+        if (candidate_source / "install" / "update.sh").is_file():
             source_dir = str(candidate_source)
 
     if not source_dir:
@@ -77,7 +77,7 @@ def _run_update(args: list[str]) -> int:
         )
         return 1
 
-    script = Path(source_dir).expanduser() / "scripts" / "update.sh"
+    script = Path(source_dir).expanduser() / "install" / "update.sh"
     if not script.is_file():
         print(f"ERROR: Missing updater script: {script}", file=sys.stderr)
         return 1

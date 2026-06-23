@@ -50,7 +50,7 @@ def load_config(config_file: Path | None = None) -> RosDevkitConfig:
 
         raise ConfigError(
             f"Config file not found: {path}\n"
-            "Run scripts/configure_ros_devkit.sh --agent codex"
+            "Run install/configure_ros_devkit.sh --agent codex"
         )
 
     values = _parse_env_file(path)
