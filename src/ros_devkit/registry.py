@@ -18,7 +18,7 @@ COMMANDS: dict[str, SkillCommand] = {
     ),
     "gazebo-simulation": SkillCommand(
         name="gazebo-simulation",
-        script_path="gazebo-simulation/scripts/gazebo_simulation.py",
+        script_path="scripts/gazebo_simulation_lib/__main__.py",
     ),
     "ros2-control-pluginize": SkillCommand(
         name="ros2-control-pluginize",

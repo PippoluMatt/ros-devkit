@@ -11,6 +11,8 @@ Set up the minimal Gazebo files an agent needs to continue the simulation work, 
 
 Prefer the `ros-devkit gazebo-simulation` CLI. It dispatches to the installed skill implementation; run `ros-devkit doctor` if the command or configured skill root is missing. Use scripts directly only when developing or debugging the CLI dispatch.
 
+Implementation note: the CLI entry point is `../scripts/gazebo_simulation_lib/__main__.py`, runnable from the shared scripts directory as `python -m gazebo_simulation_lib`.
+
 ```bash
 ros-devkit gazebo-simulation --diagnose [project_or_package_path]
 ros-devkit gazebo-simulation --setup [project_or_package_path]
