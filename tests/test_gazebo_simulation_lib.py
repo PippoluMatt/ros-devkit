@@ -1,39 +1,46 @@
 from __future__ import annotations
 
 import contextlib
-import importlib.util
 import io
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 
+ROS2_SCRIPTS = Path(__file__).resolve().parents[1] / "skills/.curated/ros2/scripts"
+if str(ROS2_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(ROS2_SCRIPTS))
 
-GAZEBO_PATH = Path(__file__).resolve().parents[1] / "scripts/gazebo_simulation.py"
+from gazebo_simulation_lib.add_plugin import _add_model_plugin_to_xacro
+from gazebo_simulation_lib.diagnose import _diagnose_bringup
+from gazebo_simulation_lib.models import Context
+from gazebo_simulation_lib.plugin_registry import (
+    _list_available_plugins,
+    _resolve_plugin,
+)
+from gazebo_simulation_lib.reporting import _print_report
+from gazebo_simulation_lib.world_sdf import (
+    _add_world_plugin_to_sdf,
+    _ensure_sensors_system_in_world,
+)
+from utils.diagnostics import Finding
 
-spec = importlib.util.spec_from_file_location("gazebo_simulation", GAZEBO_PATH)
-assert spec is not None
-gazebo_module = importlib.util.module_from_spec(spec)
-assert spec.loader is not None
-sys.modules[spec.name] = gazebo_module
-spec.loader.exec_module(gazebo_module)
 
-
-class GazeboSimulationChecks(unittest.TestCase):
+class GazeboSimulationLibChecks(unittest.TestCase):
     def test_print_report_includes_finding_sources(self) -> None:
-        context = gazebo_module.Context(
+        context = Context(
             root=Path("/tmp/ws/src"),
             description_pkg=Path("/tmp/ws/src/pawy_description"),
             bringup_pkg=Path("/tmp/ws/src/pawy_bringup"),
             errors=[],
         )
         findings = [
-            gazebo_module.Finding(
+            Finding(
                 "WARN",
                 "CMakeLists.txt does not install present config/ directory",
                 source="pawy_bringup",
             ),
-            gazebo_module.Finding(
+            Finding(
                 "WARN",
                 "missing Gazebo launch wiring: ros_gz_bridge parameter_bridge node",
                 source="pawy_bringup:launch/display.launch.xml",
@@ -42,11 +49,7 @@ class GazeboSimulationChecks(unittest.TestCase):
 
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
-            gazebo_module._print_report(
-                "ROS2 Gazebo Simulation Diagnostics",
-                context,
-                findings,
-            )
+            _print_report("ROS2 Gazebo Simulation Diagnostics", context, findings)
 
         text = output.getvalue()
         self.assertIn(
@@ -89,8 +92,8 @@ install(
                 encoding="utf-8",
             )
 
-            findings: list[gazebo_module.Finding] = []
-            gazebo_module._diagnose_bringup(pkg_dir, findings)
+            findings: list[Finding] = []
+            _diagnose_bringup(pkg_dir, findings)
 
         simplified = {
             (finding.severity, finding.message, finding.source)
@@ -115,22 +118,20 @@ install(
             simplified,
         )
 
-
     def test_add_model_plugin_to_xacro(self) -> None:
-        """Adding a model-level plugin inserts a <gazebo><plugin> block."""
         with tempfile.TemporaryDirectory() as tmp:
             xacro_path = Path(tmp) / "robot_gazebo.xacro"
             xacro_path.write_text(
                 '<?xml version="1.0" ?>\n'
                 '<robot name="robot" xmlns:xacro="http://www.ros.org/wiki/xacro">\n'
                 '    <gazebo reference="base_link">\n'
-                '        <material>Gazebo/Grey</material>\n'
-                '    </gazebo>\n'
-                '</robot>\n',
+                "        <material>Gazebo/Grey</material>\n"
+                "    </gazebo>\n"
+                "</robot>\n",
                 encoding="utf-8",
             )
             changed: list[str] = []
-            result = gazebo_module._add_model_plugin_to_xacro(
+            result = _add_model_plugin_to_xacro(
                 xacro_path,
                 "gz-sim-diff-drive-system",
                 "gz::sim::systems::DiffDrive",
@@ -145,27 +146,26 @@ install(
             self.assertIn("</robot>", content)
 
     def test_add_model_plugin_idempotent(self) -> None:
-        """Adding the same model plugin twice does not duplicate the block."""
         with tempfile.TemporaryDirectory() as tmp:
             xacro_path = Path(tmp) / "robot_gazebo.xacro"
             xacro_path.write_text(
                 '<?xml version="1.0" ?>\n'
                 '<robot name="robot" xmlns:xacro="http://www.ros.org/wiki/xacro">\n'
                 '    <gazebo reference="base_link">\n'
-                '        <material>Gazebo/Grey</material>\n'
-                '    </gazebo>\n'
-                '</robot>\n',
+                "        <material>Gazebo/Grey</material>\n"
+                "    </gazebo>\n"
+                "</robot>\n",
                 encoding="utf-8",
             )
             changed: list[str] = []
-            gazebo_module._add_model_plugin_to_xacro(
+            _add_model_plugin_to_xacro(
                 xacro_path,
                 "gz-sim-diff-drive-system",
                 "gz::sim::systems::DiffDrive",
                 changed,
                 Path(tmp),
             )
-            second = gazebo_module._add_model_plugin_to_xacro(
+            second = _add_model_plugin_to_xacro(
                 xacro_path,
                 "gz-sim-diff-drive-system",
                 "gz::sim::systems::DiffDrive",
@@ -175,7 +175,6 @@ install(
             self.assertFalse(second)
 
     def test_add_world_plugin_to_sdf(self) -> None:
-        """Adding a sensor plugin inserts a <plugin> line into the world SDF."""
         with tempfile.TemporaryDirectory() as tmp:
             sdf_path = Path(tmp) / "test_world.sdf"
             sdf_path.write_text(
@@ -183,12 +182,12 @@ install(
                 '<sdf version="1.9">\n'
                 '  <world name="test_world">\n'
                 '    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>\n'
-                '  </world>\n'
-                '</sdf>\n',
+                "  </world>\n"
+                "</sdf>\n",
                 encoding="utf-8",
             )
             changed: list[str] = []
-            result = gazebo_module._add_world_plugin_to_sdf(
+            result = _add_world_plugin_to_sdf(
                 sdf_path,
                 "gz-sim-imu-system",
                 "gz::sim::systems::Imu",
@@ -201,7 +200,6 @@ install(
             self.assertIn("gz::sim::systems::Imu", content)
 
     def test_ensure_sensors_system_in_world(self) -> None:
-        """Adding a rendering sensor also adds the Sensors system plugin."""
         with tempfile.TemporaryDirectory() as tmp:
             sdf_path = Path(tmp) / "test_world.sdf"
             sdf_path.write_text(
@@ -209,14 +207,12 @@ install(
                 '<sdf version="1.9">\n'
                 '  <world name="test_world">\n'
                 '    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>\n'
-                '  </world>\n'
-                '</sdf>\n',
+                "  </world>\n"
+                "</sdf>\n",
                 encoding="utf-8",
             )
             changed: list[str] = []
-            result = gazebo_module._ensure_sensors_system_in_world(
-                sdf_path, changed, Path(tmp)
-            )
+            result = _ensure_sensors_system_in_world(sdf_path, changed, Path(tmp))
             self.assertTrue(result)
             content = sdf_path.read_text(encoding="utf-8")
             self.assertIn("gz-sim-sensors-system", content)
@@ -224,21 +220,19 @@ install(
             self.assertIn("ogre2", content)
 
     def test_resolve_plugin_from_registry(self) -> None:
-        """The plugin registry can resolve known aliases."""
-        plugin = gazebo_module._resolve_plugin("diff_drive")
+        plugin = _resolve_plugin("diff_drive")
         self.assertIsNotNone(plugin)
+        assert plugin is not None
         self.assertEqual(plugin["filename"], "gz-sim-diff-drive-system")
         self.assertEqual(plugin["name"], "gz::sim::systems::DiffDrive")
         self.assertEqual(plugin["category"], "model")
 
     def test_resolve_plugin_unknown_returns_none(self) -> None:
-        """Unknown plugin aliases return None."""
-        plugin = gazebo_module._resolve_plugin("nonexistent_plugin_xyz")
+        plugin = _resolve_plugin("nonexistent_plugin_xyz")
         self.assertIsNone(plugin)
 
     def test_list_available_plugins(self) -> None:
-        """The plugin list contains model, sensor, and world categories."""
-        listing = gazebo_module._list_available_plugins()
+        listing = _list_available_plugins()
         self.assertIn("Model plugins", listing)
         self.assertIn("Sensor plugins", listing)
         self.assertIn("World plugins", listing)
