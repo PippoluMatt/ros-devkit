@@ -14,7 +14,7 @@ class SkillCommand:
 COMMANDS: dict[str, SkillCommand] = {
     "description-scaffold": SkillCommand(
         name="description-scaffold",
-        script_path="description-scaffold/scripts/description_scaffold.py",
+        script_path="scripts/description_scaffold_lib/__main__.py",
     ),
     "gazebo-simulation": SkillCommand(
         name="gazebo-simulation",

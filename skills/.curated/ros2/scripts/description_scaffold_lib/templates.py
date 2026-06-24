@@ -1,39 +1,58 @@
-#!/usr/bin/env python3
-"""Scaffold a ROS2 description package using the official ros2 pkg create command.
-
-Creates <name>_description/ using `ros2 pkg create`, removes unused src/include
-directories and generated CMake lint boilerplate, then adds the standard
-modular xacro structure with templated files.
-"""
+"""Templates used by the ros2 description-scaffold workflows."""
 
 from __future__ import annotations
 
-import argparse
-import shutil
-import subprocess
-import sys
-from pathlib import Path
-
-SHARED_SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
-sys.path.insert(0, str(SHARED_SCRIPTS))
-
-from cmake_lib.transforms import add_install_share_directories, remove_default_lint_block  # noqa: E402
-
-
-# ── Xacro templates ─────────────────────────────────────────────────
 
 def main_xacro(name: str, sensors: list[str]) -> str:
     includes = [f"$(find {name}_description)/urdf/materials.xacro"]
-    for s in sensors:
-        includes.append(f"$(find {name}_description)/urdf/{s}.xacro")
+    for sensor in sensors:
+        includes.append(f"$(find {name}_description)/urdf/{sensor}.xacro")
     includes.append(f"$(find {name}_description)/urdf/{name}.urdf.xacro")
-    lines = "\n    ".join(f'<xacro:include filename="{inc}" />' for inc in includes)
+    lines = "\n    ".join(f'<xacro:include filename="{include}" />' for include in includes)
     return f"""<?xml version="1.0" ?>
 <robot name="{name}" xmlns:xacro="http://www.ros.org/wiki/xacro">
 
     {lines}
 
 </robot>
+"""
+
+
+def package_xml(pkg_name: str, robot_name: str) -> str:
+    return f"""<?xml version="1.0"?>
+<package format="3">
+  <name>{pkg_name}</name>
+  <version>0.0.0</version>
+  <description>URDF/xacro description package for {robot_name}</description>
+  <maintainer email="user@example.com">TODO</maintainer>
+  <license>TODO: License declaration</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>urdf</depend>
+  <depend>xacro</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
+"""
+
+
+def cmakelists(pkg_name: str) -> str:
+    return f"""cmake_minimum_required(VERSION 3.8)
+project({pkg_name})
+
+find_package(ament_cmake REQUIRED)
+find_package(urdf REQUIRED)
+find_package(xacro REQUIRED)
+
+install(
+  DIRECTORY urdf meshes rviz
+  DESTINATION share/${{PROJECT_NAME}}
+)
+
+ament_package()
 """
 
 
@@ -102,9 +121,7 @@ URDF_XACRO = """<?xml version="1.0" ?>
 """
 
 
-# ── Sensor templates ───────────────────────────────────────────────
-
-SENSOR_SPECS: dict[str, dict] = {
+SENSOR_SPECS: dict[str, dict[str, str]] = {
     "camera": {
         "geometry": '<box size="0.03 0.03 0.03"/>',
         "mass": "0.05",
@@ -236,8 +253,6 @@ def sensor_xacro(name: str, sensor: str) -> str:
 """
 
 
-# ── RViz config ──────────────────────────────────────────────────────
-
 RVIZ_CONFIG = """Panels:
   - Class: rviz_common/Displays
     Name: Displays
@@ -266,139 +281,3 @@ Views:
       Y: 0
       Z: 0
 """
-
-
-# ── CMakeLists.txt editing ──────────────────────────────────────────
-
-def edit_cmake(cmake_path: Path) -> None:
-    """Remove generated lint boilerplate and add install directive."""
-    content = cmake_path.read_text(encoding="utf-8")
-    content = remove_default_lint_block(content)
-    content = add_install_share_directories(content, ["urdf", "meshes", "rviz"])
-    cmake_path.write_text(content, encoding="utf-8")
-
-
-# ── Scaffold ─────────────────────────────────────────────────────────
-
-def scaffold(
-    name: str,
-    sensors: list[str],
-    destination: Path,
-    maintainer: str | None,
-    email: str | None,
-    license_type: str | None,
-) -> None:
-    """Create the full package structure using ros2 pkg create."""
-    pkg_name = f"{name}_description"
-
-    if not shutil.which("ros2"):
-        print("ERROR: 'ros2' command not found. Source ROS 2 first.")
-        sys.exit(1)
-
-    pkg_dir = destination / pkg_name
-    if pkg_dir.exists():
-        print(f"ERROR: Package directory already exists: {pkg_dir}")
-        sys.exit(1)
-
-    destination.mkdir(parents=True, exist_ok=True)
-
-    # Build ros2 pkg create command
-    cmd: list[str] = [
-        "ros2", "pkg", "create", pkg_name,
-        "--build-type", "ament_cmake",
-        "--dependencies", "urdf", "xacro",
-        "--description", f"URDF/xacro description package for {name}",
-        "--destination-directory", str(destination),
-    ]
-    if maintainer:
-        cmd.extend(["--maintainer-name", maintainer])
-    if email:
-        cmd.extend(["--maintainer-email", email])
-    if license_type:
-        cmd.extend(["--license", license_type])
-
-    # Run ros2 pkg create
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        print("ERROR: ros2 pkg create failed:")
-        if result.stderr:
-            print(result.stderr)
-        if result.stdout:
-            print(result.stdout)
-        sys.exit(1)
-
-    created: list[str] = []
-    removed: list[str] = []
-
-    # Remove src/ and include/ directories
-    for d in ["src", "include"]:
-        p = pkg_dir / d
-        if p.exists():
-            shutil.rmtree(p)
-            removed.append(d)
-
-    # Edit CMakeLists.txt
-    edit_cmake(pkg_dir / "CMakeLists.txt")
-
-    # Create directories
-    for d in ["meshes", "rviz", "urdf"]:
-        (pkg_dir / d).mkdir(exist_ok=True)
-
-    # Create urdf files (skip if already exists)
-    def write_new(rel_path: str, content: str) -> None:
-        p = pkg_dir / rel_path
-        if p.exists():
-            return
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(content, encoding="utf-8")
-        created.append(rel_path)
-
-    write_new("urdf/main.xacro", main_xacro(name, sensors))
-    write_new("urdf/materials.xacro", MATERIALS_XACRO.format(name=name))
-    write_new(f"urdf/{name}.urdf.xacro", URDF_XACRO.format(name=name))
-    for sensor in sensors:
-        write_new(f"urdf/{sensor}.xacro", sensor_xacro(name, sensor))
-    write_new(f"rviz/{name}.rviz", RVIZ_CONFIG)
-
-    # Report
-    print(f"\nPackage : {pkg_name}")
-    print(f"Path    : {pkg_dir}")
-    print(f"Sensors : {', '.join(sensors) if sensors else 'none'}")
-    if removed:
-        print(f"Removed : {', '.join(d + '/' for d in removed)}")
-    print("Modified: CMakeLists.txt (removed BUILD_TESTING, added install)")
-    if created:
-        print(f"Created : {', '.join(created)}")
-    print(f"\nNext steps:")
-    print(f"  1. Customize links/joints in urdf/{name}.urdf.xacro")
-    print(f"  2. Adjust sensor positions and enable Gazebo plugins")
-    print(f"  3. Update license in package.xml")
-    print(f"  4. Validate: ros-devkit description-scaffold --verify {pkg_dir}")
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Scaffold a ROS2 description package using ros2 pkg create."
-    )
-    parser.add_argument("name", help="Robot name (e.g., my_robot)")
-    parser.add_argument("--sensors", default="", help="Comma-separated sensor names (e.g., camera,lidar,imu)")
-    parser.add_argument(
-        "--destination-directory", "--dir",
-        dest="destination",
-        default=".",
-        help="Directory where to create the package (default: current directory)",
-    )
-    parser.add_argument("--maintainer", default=None, help="Maintainer name (passed to ros2 pkg create)")
-    parser.add_argument("--email", default=None, help="Maintainer email (passed to ros2 pkg create)")
-    parser.add_argument("--license", default=None, help="License (passed to ros2 pkg create)")
-
-    args = parser.parse_args()
-    sensors = [s.strip() for s in args.sensors.split(",") if s.strip()]
-    scaffold(
-        name=args.name,
-        sensors=sensors,
-        destination=Path(args.destination),
-        maintainer=args.maintainer,
-        email=args.email,
-        license_type=args.license,
-    )

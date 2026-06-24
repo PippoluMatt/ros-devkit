@@ -1,24 +1,18 @@
 from __future__ import annotations
 
 import contextlib
-import importlib.util
 import io
+from pathlib import Path
 import sys
 import tempfile
 import unittest
-from pathlib import Path
 
 
-VALIDATE_PATH = Path(__file__).resolve().parents[1] / "scripts/validate.py"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT / "skills" / ".curated" / "ros2" / "scripts"))
 
-spec = importlib.util.spec_from_file_location(
-    "description_scaffold_validate", VALIDATE_PATH
-)
-assert spec is not None
-validate_module = importlib.util.module_from_spec(spec)
-assert spec.loader is not None
-sys.modules[spec.name] = validate_module
-spec.loader.exec_module(validate_module)
+from description_scaffold_lib import validate as validate_module
+from utils.diagnostics import Finding, format_severity, print_finding
 
 
 class DescriptionScaffoldValidateChecks(unittest.TestCase):
@@ -41,30 +35,32 @@ class DescriptionScaffoldValidateChecks(unittest.TestCase):
 
     def test_format_severity_uses_requested_colors(self) -> None:
         self.assertEqual(
-            validate_module._format_severity("ERROR", color=True),
+            format_severity("ERROR", color=True),
             "\033[31mERROR\033[0m",
         )
         self.assertEqual(
-            validate_module._format_severity("WARN", color=True),
+            format_severity("WARN", color=True),
             "\033[33mWARN\033[0m",
         )
         self.assertEqual(
-            validate_module._format_severity("INFO", color=True),
+            format_severity("INFO", color=True),
             "\033[32mINFO\033[0m",
         )
         self.assertEqual(
-            validate_module._format_severity("ERROR", color=False),
+            format_severity("ERROR", color=False),
             "ERROR",
         )
 
     def test_print_finding_includes_source(self) -> None:
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
-            validate_module._print_finding(
-                "WARN",
-                "CMakeLists.txt does not install present package directories: config",
+            print_finding(
+                Finding(
+                    "WARN",
+                    "CMakeLists.txt does not install present package directories: config",
+                    "my_robot_description",
+                ),
                 color=False,
-                source="my_robot_description",
             )
 
         self.assertEqual(
