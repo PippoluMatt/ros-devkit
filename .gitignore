@@ -6,6 +6,9 @@
 !tests/test_config.py
 !tests/test_install.py
 !tests/test_update.py
+!skills/.curated/ros2/tests/
+!skills/.curated/ros2/tests/test_cmake_lib.py
+!skills/.curated/ros2/tests/test_package_xml_lib.py
 **/__pycache__/
 **/.agents/
 **/.codex/

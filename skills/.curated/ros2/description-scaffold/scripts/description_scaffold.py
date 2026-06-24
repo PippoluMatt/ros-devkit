@@ -18,12 +18,19 @@ from scaffold import (  # noqa: E402
     scaffold,
     sensor_xacro,
 )
-from validate import (  # noqa: E402
-    find_package_name,
-    resolve_package_directory,
+from package_xml_lib.parsing import (  # noqa: E402
+    read_package_name,
     robot_name_from_package,
+)
+from validate import (  # noqa: E402
+    resolve_package_directory,
     validate,
 )
+
+
+def find_package_name(pkg_dir: Path) -> str:
+    """Determine the package name from package.xml or directory name."""
+    return read_package_name(pkg_dir / "package.xml")
 
 from utils.xml import local_name as _local_name  # noqa: E402
 

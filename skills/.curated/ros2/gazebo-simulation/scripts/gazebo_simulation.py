@@ -16,7 +16,13 @@ import urllib.error
 SHARED_SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
 sys.path.insert(0, str(SHARED_SCRIPTS))
 
+from cmake_lib.parsing import installed_share_directories  # noqa: E402
 from cmake_lib.transforms import add_install_share_directories  # noqa: E402
+from package_xml_lib.parsing import (  # noqa: E402
+    read_package_name,
+    robot_name_from_package,
+)
+from package_xml_lib.transforms import ensure_exec_depends  # noqa: E402
 from utils.diagnostics import Finding, print_finding, source as _source  # noqa: E402
 from utils.fs import relative as _relative  # noqa: E402
 from utils.xml import local_name as _local_name  # noqa: E402
@@ -132,20 +138,7 @@ class Context:
 
 
 def find_package_name(pkg_dir: Path) -> str:
-    pkg_xml = pkg_dir / "package.xml"
-    if pkg_xml.exists():
-        try:
-            root = ET.parse(pkg_xml).getroot()
-            name = root.findtext("name")
-            if name:
-                return name.strip()
-        except ET.ParseError:
-            pass
-    return pkg_dir.name
-
-
-def robot_name_from_package(pkg_name: str) -> str:
-    return pkg_name[: -len("_description")] if pkg_name.endswith("_description") else pkg_name
+    return read_package_name(pkg_dir / "package.xml")
 
 
 def _should_skip_dir(dirname: str) -> bool:
@@ -236,26 +229,6 @@ def discover_context(
         errors.extend(discovered_errors)
 
     return Context(search_root, description_pkg, bringup_pkg, errors)
-
-
-def _cmake_without_comments(text: str) -> str:
-    return "\n".join(line.split("#", 1)[0] for line in text.splitlines())
-
-
-def _installed_share_directories(cmake_content: str) -> set[str]:
-    uncommented = _cmake_without_comments(cmake_content)
-    installed: set[str] = set()
-    for match in re.finditer(
-        r"install\s*\(\s*DIRECTORY\s+(?P<dirs>.*?)\s+DESTINATION\s+share/\$\{PROJECT_NAME\}",
-        uncommented,
-        re.DOTALL,
-    ):
-        for token in re.split(r"[\s;]+", match.group("dirs").strip()):
-            directory = token.strip("\"'").replace("\\", "/").rstrip("/")
-            basename = directory.split("/")[-1]
-            if basename:
-                installed.add(basename)
-    return installed
 
 
 def _link_is_footprint(name: str) -> bool:
@@ -418,7 +391,7 @@ def _diagnose_bringup(pkg_dir: Path, findings: list[Finding]) -> None:
     cmake = pkg_dir / "CMakeLists.txt"
     installed_dirs: set[str] = set()
     if cmake.exists():
-        installed_dirs = _installed_share_directories(cmake.read_text(encoding="utf-8"))
+        installed_dirs = installed_share_directories(cmake.read_text(encoding="utf-8"))
         if "launch" in installed_dirs:
             findings.append(
                 Finding(
@@ -939,29 +912,7 @@ def _ensure_gazebo_include(
         return
     lines.insert(insert_at, include_line)
     main_xacro.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    _append_once(changed, _relative(main_xacro, root))
-
-
-def _ensure_package_exec_depends(
-    pkg_dir: Path,
-    deps: list[str],
-    changed: list[str],
-    root: Path,
-) -> None:
-    package_xml = pkg_dir / "package.xml"
-    if not package_xml.exists():
-        return
-    content = package_xml.read_text(encoding="utf-8")
-    missing = [dep for dep in deps if f">{dep}<" not in content]
-    if not missing:
-        return
-    insertion = "".join(f"  <exec_depend>{dep}</exec_depend>\n" for dep in missing)
-    if "</package>" in content:
-        updated = content.replace("</package>", f"\n{insertion}</package>", 1)
-    else:
-        updated = content.rstrip() + "\n" + insertion
-    package_xml.write_text(updated, encoding="utf-8")
-    _append_once(changed, _relative(package_xml, root))
+    _append_once(changed, f"Updated: " + _relative(main_xacro, root))
 
 
 def _ensure_cmake_installs(
@@ -979,13 +930,13 @@ def _ensure_cmake_installs(
             "ament_package()\n"
         )
         cmake.write_text(content, encoding="utf-8")
-        _append_once(changed, _relative(cmake, root))
+        _append_once(changed, f"Updated: " + _relative(cmake, root))
 
     before = cmake.read_text(encoding="utf-8")
     after = add_install_share_directories(before, directories)
     if after != before:
         cmake.write_text(after, encoding="utf-8")
-        _append_once(changed, _relative(cmake, root))
+        _append_once(changed, f"Updated: " + _relative(cmake, root))
 
 
 # ── Plugin registry helpers ─────────────────────────────────────────────────
@@ -1112,7 +1063,7 @@ def _add_model_plugin_to_xacro(
     else:
         updated = content.rstrip() + "\n" + block
     gazebo_xacro_path.write_text(updated, encoding="utf-8")
-    _append_once(changed, _relative(gazebo_xacro_path, root))
+    _append_once(changed, f"Updated: " + _relative(gazebo_xacro_path, root))
     return True
 
 
@@ -1169,7 +1120,7 @@ def _add_world_plugin_to_sdf(
         return False
     lines.insert(insert_at, plugin_line)
     world_sdf_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    _append_once(changed, _relative(world_sdf_path, root))
+    _append_once(changed, f"Updated: " + _relative(world_sdf_path, root))
     return True
 
 
@@ -1208,7 +1159,7 @@ def _ensure_sensors_system_in_world(
         return False
     lines.insert(insert_at, block)
     world_sdf_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    _append_once(changed, _relative(world_sdf_path, root))
+    _append_once(changed, f"Updated: " + _relative(world_sdf_path, root))
     return True
 
 
@@ -1343,7 +1294,7 @@ def add_plugin(args: argparse.Namespace) -> bool:
         robot_name = robot_name or robot_name_from_package(pkg_name)
     elif context.bringup_pkg is not None:
         bringup_name = find_package_name(context.bringup_pkg)
-        robot_name = robot_name or bringup_name[: -len("_bringup")] if bringup_name.endswith("_bringup") else robot_name
+        robot_name = robot_name or robot_name_from_package(bringup_name)
 
     # Model-level plugins go in the <gazebo> tag of the robot xacro
     if category == "model":
@@ -1439,7 +1390,7 @@ def add_plugin(args: argparse.Namespace) -> bool:
                             Finding("INFO", f"Sensors system plugin already present in {world_name}.sdf")
                         )
 
-    findings.extend(Finding("INFO", f"Updated: {path}") for path in changed)
+    findings.extend(Finding("INFO", path) for path in changed)
     if not changed:
         findings.append(Finding("INFO", "No files were modified"))
 
@@ -1465,7 +1416,7 @@ def setup(args: argparse.Namespace) -> bool:
 
     if context.bringup_pkg is not None:
         bringup_name = find_package_name(context.bringup_pkg)
-        robot_name = robot_name or args.robot_name or bringup_name[: -len("_bringup")]
+        robot_name = robot_name or args.robot_name or robot_name_from_package(bringup_name)
         for directory in BRINGUP_INSTALL_DIRS:
             path = context.bringup_pkg / directory
             if not path.exists():
@@ -1495,17 +1446,17 @@ def setup(args: argparse.Namespace) -> bool:
             changed,
             context.root,
         )
-        _ensure_package_exec_depends(
-            context.bringup_pkg,
+        ensure_exec_depends(
+            context.bringup_pkg / "package.xml",
             ["ros_gz_sim", "ros_gz_bridge"],
-            changed,
-            context.root,
+            pkg_dir=context.bringup_pkg,
+            changed=changed,
         )
     else:
         findings.append(Finding("WARN", "No *_bringup package found; skipped bridge and launch setup"))
 
     findings.extend(Finding("INFO", f"Created: {path}") for path in created)
-    findings.extend(Finding("INFO", f"Updated: {path}") for path in changed)
+    findings.extend(Finding("INFO", path) for path in changed)
     if not created and not changed:
         findings.append(Finding("INFO", "No missing Gazebo scaffold files found"))
 
