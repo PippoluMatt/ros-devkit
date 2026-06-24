@@ -97,9 +97,9 @@ fi
 
 namespace_root="$(expand_path "$namespace_root")"
 
-required_script="$namespace_root/description-scaffold/scripts/description_scaffold.py"
+required_script="$namespace_root/scripts/description_scaffold_lib/__main__.py"
 if [[ "$force" -eq 0 && ! -f "$required_script" ]]; then
-  die "Missing required v1 script: $required_script
+  die "Missing required script: $required_script
 Use --force to write config before installing skills."
 fi
 

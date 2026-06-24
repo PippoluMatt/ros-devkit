@@ -159,7 +159,6 @@ class ManagedInstall:
             / "skills"
             / ".curated"
             / "ros2"
-            / "description-scaffold"
             / "scripts"
             / "updated_check.py"
         )
@@ -170,7 +169,7 @@ class ManagedInstall:
                 "    ),\n}\n",
                 '    ),\n    "updated-check": SkillCommand(\n'
                 '        name="updated-check",\n'
-                '        script_path="description-scaffold/scripts/updated_check.py",\n'
+                '        script_path="scripts/updated_check.py",\n'
                 "    ),\n}\n",
             ),
             encoding="utf-8",

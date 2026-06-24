@@ -27,12 +27,12 @@ There is no repository-wide build step. Validate the files you change directly:
 - `python3 -m unittest discover -s tests` runs the CLI, config, install, and update tests.
 - `python3 -m py_compile src/ros_devkit/*.py` checks CLI package syntax.
 - `python3 -m py_compile skills/.curated/ros2/<skill>/scripts/*.py` checks skill-local script syntax.
-- `python3 -m py_compile skills/.curated/ros2/scripts/cmake_lib/*.py skills/.curated/ros2/scripts/ros2_control_pluginize_lib/*.py skills/.curated/ros2/scripts/utils/*.py` checks shared library syntax.
-- `python3 -m unittest discover -s skills/.curated/ros2/description-scaffold/checks` runs description-scaffold validation checks.
+- `python3 -m py_compile skills/.curated/ros2/scripts/cmake_lib/*.py skills/.curated/ros2/scripts/package_xml_lib/*.py skills/.curated/ros2/scripts/ros2_control_pluginize_lib/*.py skills/.curated/ros2/scripts/description_scaffold_lib/*.py skills/.curated/ros2/scripts/utils/*.py` checks shared library syntax.
+- `python3 -m unittest tests.test_description_scaffold_lib` runs description-scaffold validation checks.
 - `python3 -m unittest discover -s skills/.curated/ros2/gazebo-simulation/checks` runs gazebo-simulation checks.
 - `bash -n install/install.sh install/update.sh install/configure_ros_devkit.sh install/dev_ros_devkit.sh` checks shell script syntax.
 - `install/dev_ros_devkit.sh doctor` verifies the checkout dispatcher can find curated skill scripts.
-- `python3 skills/.curated/ros2/description-scaffold/scripts/validate.py <package-dir>` validates generated description packages.
+- `PYTHONPATH=skills/.curated/ros2/scripts python3 -m description_scaffold_lib --verify <package-dir>` validates generated description packages.
 - `python3 skills/.curated/ros2/ros2-dockerfile/scripts/render_dockerfile.py --target-dir /tmp/dockerfile-check` smoke-tests Dockerfile rendering.
 - `git diff --check` catches trailing whitespace and patch formatting issues.
 

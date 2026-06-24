@@ -271,7 +271,6 @@ class InstallCommandTest(unittest.TestCase):
             / "skills"
             / ".curated"
             / "ros2"
-            / "description-scaffold"
             / "scripts"
             / "local_feature.py"
         )
@@ -283,7 +282,7 @@ class InstallCommandTest(unittest.TestCase):
                 "    ),\n}\n",
                 '    ),\n    "local-feature": SkillCommand(\n'
                 '        name="local-feature",\n'
-                '        script_path="description-scaffold/scripts/local_feature.py",\n'
+                '        script_path="scripts/local_feature.py",\n'
                 "    ),\n}\n",
             ),
             encoding="utf-8",
