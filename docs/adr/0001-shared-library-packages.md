@@ -1,5 +1,0 @@
-# Shared library packages for cross-cutting skill infrastructure
-
-Duplicated helpers (`write_file_if_changed` ×6, `local_name` ×3, `relative` ×2, `source` ×2) were spread across individual skill scripts with incompatible signatures. Consolidated them into two shared Python packages under `scripts/`: `utils/` for cross-cutting infrastructure (diagnostics, file I/O, XML tags) and `cmake_lib/` for CMake text manipulation (parsing primitives, transforms, CLI). Skill-specific code stays in skill-local packages (e.g. `ros2_control_pluginize_lib/`), importing primitives from the shared packages.
-
-The alternative was leaving the duplication in place. This was rejected because the copies had already diverged in signature (the pluginize `write_file_if_changed` tracked a change-list; the cmakelists copies returned a bool), making bug fixes require N edits instead of one.
